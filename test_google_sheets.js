@@ -61,3 +61,4 @@ const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...ar
     process.exit(1);
   }
 })();
+

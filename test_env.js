@@ -6,3 +6,4 @@ console.log('GS_SPREADSHEET_ID:', process.env.GS_SPREADSHEET_ID);
 console.log('GS_RANGE:', process.env.GS_RANGE);
 console.log('GS_PRIVATE_KEY existe:', !!process.env.GS_PRIVATE_KEY);
 console.log('RESULT_SINK:', process.env.RESULT_SINK);
+

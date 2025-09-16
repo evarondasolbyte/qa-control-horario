@@ -28,10 +28,7 @@ Cypress.Commands.add('login', ({
   email = 'superadmin@novatrans.app',
   password = 'solbyte',
   useSession = true,
-  rememberMe = false,
-  logout = false,
-  logoutFromMenu = false,
-  themeAction = null
+  rememberMe = false
 } = {}) => {
 
   // Encapsulo el flujo real de login para reutilizarlo dentro o fuera de cy.session.
@@ -63,55 +60,6 @@ Cypress.Commands.add('login', ({
     // Envío el formulario - buscar botón "Entrar" o submit
     cy.get('button[type="submit"], button:contains("Entrar"), input[type="submit"]').click();
   };
-
-  // Si se solicita logout, hacer logout primero
-  if (logout) {
-    cy.wait(30000); // Esperar 30 segundos antes de hacer login
-    cy.visit('/login');
-    performLogin();
-    cy.wait(5000); // Tiempo normal para que cargue completamente
-    // Buscar botón de logout/salir con manejo de errores
-    cy.get('button:contains("Salir")').first().click({ force: true });
-    cy.wait(2000); // Más tiempo para el logout
-    cy.url().should('include', '/login');
-    return;
-  }
-
-  // Si se solicita logout desde el menú (TC010)
-  if (logoutFromMenu) {
-    cy.wait(30000); // Esperar 30 segundos antes de hacer login
-    cy.visit('/login');
-    performLogin();
-    cy.wait(5000); // Tiempo para que cargue completamente
-    // Buscar el icono "S" en la esquina superior derecha y hacer click
-    cy.get('[data-testid="user-menu"], .user-menu, button:contains("S"), .avatar, .user-avatar').first().click({ force: true });
-    cy.wait(1000);
-    // Buscar opción "Salir" en el menú desplegable
-    cy.get('button:contains("Salir"), a:contains("Salir"), .logout-option').first().click({ force: true });
-    cy.wait(2000);
-    cy.url().should('include', '/login');
-    return;
-  }
-
-  // Si se solicita cambio de tema (TC011, TC012, TC013)
-  if (themeAction) {
-    cy.visit('/login');
-    performLogin();
-    cy.wait(5000); // Tiempo para que cargue completamente
-    // Buscar el icono "S" en la esquina superior derecha y hacer click
-    cy.get('[data-testid="user-menu"], .user-menu, button:contains("S"), .avatar, .user-avatar').first().click({ force: true });
-    cy.wait(1000);
-    // Buscar la opción de tema correspondiente
-    if (themeAction === 'claro') {
-      cy.get('button:contains("A modo claro"), a:contains("A modo claro"), .theme-light').first().click({ force: true });
-    } else if (themeAction === 'oscuro') {
-      cy.get('button:contains("A modo oscuro"), a:contains("A modo oscuro"), .theme-dark').first().click({ force: true });
-    } else if (themeAction === 'sistema') {
-      cy.get('button:contains("A modo del sistema"), a:contains("A modo del sistema"), .theme-system').first().click({ force: true });
-    }
-    cy.wait(2000); // Tiempo para que se aplique el cambio de tema
-    return;
-  }
 
   if (useSession) {
     // Uso cy.session para cachear sesión por combinación de credenciales.
@@ -178,16 +126,6 @@ Cypress.Commands.add('agregarResultadoPantalla', (params) => {
 // 2) Escribir un resumen final de la pantalla en el Excel principal
 Cypress.Commands.add('procesarResultadosPantalla', (pantalla) => {
   if (!resultadosPorPantalla[pantalla] || resultadosPorPantalla[pantalla].resultados.length === 0) return;
-
-  // Ignorar errores de Livewire durante el guardado
-  cy.on('uncaught:exception', (err, runnable) => {
-    if (err.message.includes('Component already registered') ||
-        err.message.includes('Snapshot missing on Livewire component') ||
-        err.message.includes('Component already initialized')) {
-      return false;
-    }
-    return true;
-  });
 
   const { resultados } = resultadosPorPantalla[pantalla];
   const errores = resultados.filter(r => r.resultado === 'ERROR');
