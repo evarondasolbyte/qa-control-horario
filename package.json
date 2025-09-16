@@ -1,0 +1,26 @@
+{
+  "name": "qa-control-horario",
+  "version": "1.0.0",
+  "description": "Pruebas automatizadas para Control Horario",
+  "main": "index.js",
+  "scripts": {
+    "cypress:open": "cypress open",
+    "cypress:run": "cypress run",
+    "test": "cypress run"
+  },
+  "keywords": ["cypress", "testing", "control-horario", "qa"],
+  "author": "QA Team",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^17.2.1",
+    "fs-extra": "^11.3.0",
+    "google-auth-library": "^10.2.1",
+    "googleapis": "^155.0.1",
+    "node-fetch": "^3.3.2",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "cypress": "^14.5.0"
+  }
+}
+

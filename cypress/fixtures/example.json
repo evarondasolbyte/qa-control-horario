@@ -1,0 +1,19 @@
+{
+  "usuario": {
+    "admin": {
+      "email": "admin@novatrans.com",
+      "password": "password123"
+    },
+    "usuario_normal": {
+      "email": "usuario@novatrans.com",
+      "password": "password456"
+    }
+  },
+  "datos_prueba": {
+    "empleado": {
+      "nombre": "Juan Pérez",
+      "dni": "12345678A",
+      "email": "juan.perez@empresa.com"
+    }
+  }
+}
