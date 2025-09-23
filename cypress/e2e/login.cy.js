@@ -18,11 +18,6 @@ describe('LOGIN - Validación completa con gestión de errores y reporte a Excel
     { numero: 13, nombre: 'TC013 - Al loguearte, pulsar "A modo del sistema"', funcion: cambiarModoSistema, prioridad: 'MEDIA' }
   ];
 
-  // Resumen al final
-  after(() => {
-    cy.procesarResultadosPantalla('Login');
-  });
-
   // Filtrar casos por prioridad si se especifica
   const prioridadFiltro = Cypress.env('prioridad');
   const casosFiltrados = prioridadFiltro && prioridadFiltro !== 'todas'
@@ -81,6 +76,7 @@ describe('LOGIN - Validación completa con gestión de errores y reporte a Excel
       });
     });
   });
+
 
   // Helper: abre el menú de usuario y espera al panel
   function abrirMenuUsuario() {

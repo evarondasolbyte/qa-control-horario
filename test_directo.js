@@ -59,5 +59,3 @@ const { GoogleAuth } = require('google-auth-library');
     console.error('❌ Error:', error.message);
   }
 })();
-
-
