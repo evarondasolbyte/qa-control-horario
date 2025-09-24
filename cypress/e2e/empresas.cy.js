@@ -1,6 +1,7 @@
 // Inicio de la suite de pruebas de empresas con gestión de errores y reporte automático a Excel
 describe('EMPRESAS - Validación completa con gestión de errores y reporte a Excel', () => {
   const archivo = 'reportes_pruebas_novatrans.xlsx';
+  let contadorPrueba = 1; // Contador para "prueba1+"
 
   // === CONFIGURACIÓN INICIAL ===
   before(() => {
@@ -16,26 +17,6 @@ describe('EMPRESAS - Validación completa con gestión de errores y reporte a Ex
       }
     );
     cy.visit('/empresas'); // Activa sesión y navega a empresas
-
-    // Limpiar todos los registros antes de empezar los tests
-    cy.log('Limpiando todos los registros de empresas (pre-ejecución)...');
-    cy.get('body').then(($body) => {
-      const rows = $body.find('.fi-ta-row, tr');
-      if (rows.length > 0) {
-        cy.log(`Encontrados ${rows.length} registros para borrar`);
-        cy.get('th input[type="checkbox"], .fi-ta-header-cell input[type="checkbox"], input[type="checkbox"]').first().click({ force: true });
-        cy.wait(1000);
-        cy.get('button:contains("Abrir acciones"), .fi-dropdown-trigger button').first().click({ force: true });
-        cy.wait(500);
-        cy.get('button:contains("Borrar seleccionados")').first().click({ force: true });
-        cy.wait(500);
-        cy.get('button:contains("Borrar")').first().click({ force: true });
-        cy.wait(3000);
-        cy.log('Borrado masivo completado (pre-ejecución)');
-      } else {
-        cy.log('No hay registros para borrar (pre-ejecución)');
-      }
-    });
   });
 
   const casos = [
@@ -77,35 +58,6 @@ describe('EMPRESAS - Validación completa con gestión de errores y reporte a Ex
     cy.procesarResultadosPantalla('Empresas');
   });
 
-  // 🔹 Hook condicional: limpiar tabla justo ANTES del TC014
-  beforeEach(function () {
-    const titulo = this.currentTest?.title || '';
-    if (titulo.includes('TC014')) {
-      cy.log('⚠️ Limpiando tabla antes del TC014 (Crear Empresa)...');
-      cy.visit('/empresas');
-      cy.get('body').then(($body) => {
-        const rows = $body.find('.fi-ta-row, tr');
-        if (rows.length > 0) {
-          cy.log(`Encontrados ${rows.length} registros para borrar`);
-          // Seleccionar todos
-          cy.get('th input[type="checkbox"], .fi-ta-header-cell input[type="checkbox"], input[type="checkbox"]').first().click({ force: true });
-          cy.wait(1000);
-          // Abrir acciones masivas
-          cy.get('button:contains("Abrir acciones"), .fi-dropdown-trigger button').first().click({ force: true });
-          cy.wait(500);
-          // Borrar seleccionados
-          cy.get('button:contains("Borrar seleccionados")').first().click({ force: true });
-          cy.wait(500);
-          // Confirmar borrado
-          cy.get('button:contains("Borrar")').first().click({ force: true });
-          cy.wait(3000);
-          cy.log('✅ Tabla limpiada - lista para los tests de crear');
-        } else {
-          cy.log('Tabla ya está vacía antes del TC014');
-        }
-      });
-    }
-  });
 
   // Filtrar casos por prioridad si se especifica
   const prioridadFiltro = Cypress.env('prioridad');
@@ -474,8 +426,27 @@ describe('EMPRESAS - Validación completa con gestión de errores y reporte a Ex
       cy.log(`Ejecutando TC${numeroCasoFormateado}: ${filtroEspecifico.valor_etiqueta_1} - ${filtroEspecifico.dato_1}`);
       cy.log(`Datos del filtro:`, JSON.stringify(filtroEspecifico, null, 2));
 
-      const nombre = filtroEspecifico.dato_1 || '';
-      const nif = filtroEspecifico.dato_2 || '';
+      let nombre = filtroEspecifico.dato_1 || '';
+      let nif = filtroEspecifico.dato_2 || '';
+
+      // Si el nombre contiene "prueba1+", usar el contador
+      // EXCEPCIÓN: TC017 (duplicado) siempre usa "prueba1" fijo
+      if (nombre.includes('prueba1+') && numeroCaso !== 17) {
+        nombre = nombre.replace('prueba1+', `prueba${contadorPrueba}`);
+        contadorPrueba++; // Incrementar contador para la próxima ejecución
+      } else if (nombre.includes('prueba1+') && numeroCaso === 17) {
+        // TC017: usar "prueba1" fijo para duplicado
+        nombre = nombre.replace('prueba1+', 'prueba1');
+      }
+
+      // Si el NIF contiene "nif1+", usar el contador
+      // EXCEPCIÓN: TC017 (duplicado) siempre usa "nif1" fijo
+      if (nif.includes('nif1+') && numeroCaso !== 17) {
+        nif = nif.replace('nif1+', `nif${contadorPrueba}`);
+      } else if (nif.includes('nif1+') && numeroCaso === 17) {
+        // TC017: usar "nif1" fijo para duplicado
+        nif = nif.replace('nif1+', 'nif1');
+      }
 
       cy.log(`Crear empresa con nombre="${nombre}", nif="${nif}"`);
 
@@ -566,11 +537,30 @@ describe('EMPRESAS - Validación completa con gestión de errores y reporte a Ex
         return cy.wrap(false);
       }
 
-      const nombre = filtroEspecifico.dato_1 || '';
-      const nif = filtroEspecifico.dato_2 || '';
+      let nombre = filtroEspecifico.dato_1 || '';
+      let nif = filtroEspecifico.dato_2 || '';
+
+      // Si el nombre contiene "prueba1+", usar el contador
+      // EXCEPCIÓN: TC017 (duplicado) siempre usa "prueba1" fijo
+      if (nombre.includes('prueba1+') && numeroCaso !== 17) {
+        nombre = nombre.replace('prueba1+', `prueba${contadorPrueba}`);
+        contadorPrueba++; // Incrementar contador para la próxima ejecución
+      } else if (nombre.includes('prueba1+') && numeroCaso === 17) {
+        // TC017: usar "prueba1" fijo para duplicado
+        nombre = nombre.replace('prueba1+', 'prueba1');
+      }
+
+      // Si el NIF contiene "nif1+", usar el contador
+      // EXCEPCIÓN: TC017 (duplicado) siempre usa "nif1" fijo
+      if (nif.includes('nif1+') && numeroCaso !== 17) {
+        nif = nif.replace('nif1+', `nif${contadorPrueba}`);
+      } else if (nif.includes('nif1+') && numeroCaso === 17) {
+        // TC017: usar "nif1" fijo para duplicado
+        nif = nif.replace('nif1+', 'nif1');
+      }
 
       cy.get('.fi-ta-table, table').scrollTo('right', { ensureScrollable: false });
-      cy.wait(500);
+    cy.wait(500);
 
       cy.get('a:contains("Editar"), button:contains("Editar")').first().click({ force: true });
       cy.url().should('include', '/empresas/');

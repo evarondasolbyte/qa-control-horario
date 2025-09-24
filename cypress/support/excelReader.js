@@ -34,16 +34,18 @@ Cypress.Commands.add('leerDatosGoogleSheets', () => {
   // 🔧 Ajusta estas constantes si cambias de hoja
   const spreadsheetId = '1SrfWzbyPDnNsCd5AKrInQAvOG-wgUW9sWqH6Z7VPdXY'; // <-- ID del Excel de Control Horario
   const gid = '0';                           // <-- cambia si tu pestaña no es la primera
-  const range = 'A:I';                       // <-- rango de columnas
+  const range = 'A:L';                       // <-- rango de columnas
   const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${gid}&range=${encodeURIComponent(range)}`;
+  
+  cy.log(`🔍 Intentando leer hoja con gid=${gid} desde: ${csvUrl}`);
 
   return cy.request({ method: 'GET', url: csvUrl, failOnStatusCode: false }).then((response) => {
     if (response.status === 200 && response.body) {
       const csvData = response.body;
       let filasExcel = parseCsvRespectingQuotes(csvData);
 
-      // Normalizar longitud de columnas A..I (9 columnas)
-      const COLS = 9;
+      // Normalizar longitud de columnas A..L (12 columnas)
+      const COLS = 12;
       filasExcel = filasExcel.map(f => {
         const row = Array.from(f);
         while (row.length < COLS) row.push('');
@@ -90,7 +92,10 @@ Cypress.Commands.add('obtenerDatosExcel', (pantalla) => {
           dato_1: safe(fila[5]),            // F
           etiqueta_2: safe(fila[6]),        // G
           valor_etiqueta_2: safe(fila[7]),  // H
-          dato_2: safe(fila[8])             // I
+          dato_2: safe(fila[8]),            // I
+          etiqueta_3: safe(fila[9]),        // J
+          valor_etiqueta_3: safe(fila[10]), // K
+          dato_3: safe(fila[11])            // L
         };
 
         datosFiltrados.push(datoFiltro);
