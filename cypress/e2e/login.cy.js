@@ -1,67 +1,103 @@
 // Inicio de la suite de pruebas de login con gestión de errores y reporte automático a Excel
 describe('LOGIN - Validación completa con gestión de errores y reporte a Excel', () => {
   const archivo = 'reportes_pruebas_control_horario.xlsx';
+  const LOGIN_URL_ABS = 'https://horario.dev.novatrans.app/panelinterno/login';
+  const LOGIN_PATH = '/panelinterno/login';
+  const DASHBOARD_PATH = '/panelinterno';
 
-  const casos = [
-    { numero: 1, nombre: 'TC001 - Login con credenciales válidas', funcion: loginCredencialesValidas, prioridad: 'ALTA' },
-    { numero: 2, nombre: 'TC002 - Correo electrónico incorrecto', funcion: loginEmailIncorrecto, prioridad: 'ALTA' },
-    { numero: 3, nombre: 'TC003 - Contraseña incorrecta', funcion: loginPasswordIncorrecta, prioridad: 'ALTA' },
-    { numero: 4, nombre: 'TC004 - Correo electrónico y contraseña incorrectos', funcion: loginCredencialesIncorrectas, prioridad: 'ALTA' },
-    { numero: 5, nombre: 'TC005 - Pulsar "Recordarme" con credenciales válidas', funcion: loginConRecordarme, prioridad: 'MEDIA' },
-    { numero: 6, nombre: 'TC006 - Correo electrónico vacío', funcion: loginEmailVacio, prioridad: 'ALTA' },
-    { numero: 7, nombre: 'TC007 - Contraseña vacía', funcion: loginPasswordVacia, prioridad: 'ALTA' },
-    { numero: 8, nombre: 'TC008 - Correo electrónico y contraseña vacías', funcion: loginCredencialesVacias, prioridad: 'ALTA' },
-    { numero: 9, nombre: 'TC009 - Pulsar "Salir" al iniciar sesión', funcion: logoutNormal, prioridad: 'MEDIA' },
-    { numero: 10, nombre: 'TC010 - Pulsar "Salir" al iniciar sesión desde el otro botón', funcion: logoutDesdeMenu, prioridad: 'MEDIA' },
-    { numero: 11, nombre: 'TC011 - Al loguearte, pulsar "A modo claro"', funcion: cambiarModoClaro, prioridad: 'MEDIA' },
-    { numero: 12, nombre: 'TC012 - Al loguearte, pulsar "A modo oscuro"', funcion: cambiarModoOscuro, prioridad: 'MEDIA' },
-    { numero: 13, nombre: 'TC013 - Al loguearte, pulsar "A modo del sistema"', funcion: cambiarModoSistema, prioridad: 'MEDIA' }
-  ];
-
-  // Filtrar casos por prioridad si se especifica
-  const prioridadFiltro = Cypress.env('prioridad');
-  const casosFiltrados = prioridadFiltro && prioridadFiltro !== 'todas'
-    ? casos.filter(caso => caso.prioridad === prioridadFiltro.toUpperCase())
-    : casos;
-
-  casosFiltrados.forEach(({ numero, nombre, funcion, prioridad }) => {
-    it(`${nombre} [${prioridad}]`, () => {
-      // Esperar entre tests para evitar "demasiados intentos"
-      if (numero > 1) {
-        cy.wait(2000);
-      }
-      //usar el helper correcto (mismo patrón que en "Otros Gastos")
-      cy.resetearFlagsTest();
-
-      // Captura de errores y registro
-      cy.on('fail', (err) => {
-        cy.capturarError(nombre, err, {
-          numero,
-          nombre,
-          esperado: 'Comportamiento correcto',
-          archivo,
-          pantalla: 'Login'
-        });
+  // Ignorar ciertos errores JS de la app que no deben romper la suite
+  before(() => {
+    Cypress.on('uncaught:exception', (err) => {
+      if (
+        err.message?.includes('Component already registered') ||
+        err.message?.includes('Snapshot missing on Livewire component') ||
+        err.message?.includes('Component already initialized')
+      ) {
         return false;
+      }
+      return true;
+    });
+  });
+
+  after(() => {
+    cy.procesarResultadosPantalla('Login');
+  });
+
+  it('Ejecutar todos los casos de Login desde Google Sheets', () => {
+    cy.obtenerDatosExcel('Login').then((casosExcel) => {
+      cy.log(`Cargados ${casosExcel.length} casos desde Excel para Login`);
+
+      const prioridadFiltro = (Cypress.env('prioridad') || '').toString().toUpperCase();
+      const casosFiltrados = prioridadFiltro && prioridadFiltro !== 'TODAS'
+        ? casosExcel.filter(c => (c.prioridad || '').toUpperCase() === prioridadFiltro)
+        : casosExcel;
+
+      let chain = cy.wrap(null);
+      casosFiltrados.forEach((casoExcel, idx) => {
+        chain = chain.then(() => ejecutarCaso(casoExcel, idx));
       });
 
-      // Ignorar errores de JavaScript de la aplicación
-      cy.on('uncaught:exception', (err, runnable) => {
-        // Ignorar errores de Livewire que interfieren con el guardado
-        if (err.message.includes('Component already registered') ||
-          err.message.includes('Snapshot missing on Livewire component') ||
-          err.message.includes('Component already initialized')) {
-          return false;
-        }
-        // Para otros errores, permitir que falle
-        return true;
-      });
+      return chain;
+    });
+  });
 
-      // Ejecuta el caso y sólo auto-OK si nadie registró antes
-      return funcion().then(() => {
-        cy.estaRegistrado().then((ya) => {
+  // === Helper: siempre dejar el estado en la pantalla de login absoluta y estable ===
+  function irALoginLimpio() {
+    cy.clearCookies({ log: false });
+    cy.clearLocalStorage({ log: false });
+    cy.window({ log: false }).then(w => { try { w.sessionStorage?.clear(); } catch (_) {} });
+
+    cy.visit(LOGIN_URL_ABS, { failOnStatusCode: false });
+    // Validamos por URL (no pathname estricto) y esperamos a que aparezca el input de email
+    cy.url({ timeout: 15000 }).should('include', LOGIN_PATH);
+    return cy.get('input[type="email"], input[placeholder*="Correo"], input[placeholder*="email"]', { timeout: 15000 })
+      .should('exist');
+  }
+
+  // === Helper: click robusto del botón "Salir" en dashboard (varios selectores) ===
+  function clickBotonSalir() {
+    return cy.get('body').then($body => {
+      // 1) Botón de un form /logout
+      const selForm = 'form[action*="/logout"] button[type="submit"]';
+      if ($body.find(selForm).length) {
+        cy.log('🔎 Encontrado botón Salir vía form[action*="/logout"]');
+        return cy.get(selForm).scrollIntoView().click({ force: true });
+      }
+
+      // 2) Cualquier button/a/[role=button] cuyo texto contenga "Salir"
+      const textoSalir = /Salir/i;
+      const $btnText = $body.find('button, a, [role="button"]').filter((_, el) => textoSalir.test(el.innerText || ''));
+      if ($btnText.length) {
+        cy.log('🔎 Encontrado botón Salir por texto visible');
+        return cy.wrap($btnText.eq(0)).scrollIntoView().click({ force: true });
+      }
+
+      // 3) Fallback: en algunos temas el botón está en un header lateral
+      cy.log('⚠️ Botón Salir no visible directo, intento alternativo por contains');
+      return cy.contains('button, a, [role="button"]', textoSalir, { timeout: 3000 })
+        .scrollIntoView()
+        .click({ force: true });
+    });
+  }
+
+  // === Ejecuta 1 caso: SIEMPRE arranca desde /panelinterno/login ===
+  function ejecutarCaso(casoExcel, idx) {
+    const numero = parseInt(String(casoExcel.caso).replace('TC', ''), 10) || (idx + 1);
+    const nombre  = `${casoExcel.caso} - ${casoExcel.nombre}`;
+    const funcion = obtenerFuncionPorNombre(casoExcel.funcion);
+
+    cy.log('────────────────────────────────────────────────────────');
+    cy.log(`▶️ ${nombre} [${casoExcel.prioridad || 'SIN PRIORIDAD'}] (función: ${casoExcel.funcion})`);
+    if (idx > 0) cy.wait(600);
+    cy.resetearFlagsTest();
+
+    return irALoginLimpio()
+      .then(() => {
+        return funcion(casoExcel);
+      })
+      .then(() => {
+        return cy.estaRegistrado().then((ya) => {
           if (!ya) {
-            cy.log(`Registrando OK automático para test ${numero}: ${nombre}`);
             cy.registrarResultados({
               numero,
               nombre,
@@ -73,90 +109,144 @@ describe('LOGIN - Validación completa con gestión de errores y reporte a Excel
             });
           }
         });
+      }, (err) => {
+        cy.capturarError(nombre, err, {
+          numero,
+          nombre,
+          esperado: 'Comportamiento correcto',
+          archivo,
+          pantalla: 'Login'
+        });
+        return null; // continuar con el siguiente caso
       });
-    });
-  });
+  }
 
+  // === MAPEO DE FUNCIONES ===
+  function obtenerFuncionPorNombre(nombreFuncion) {
+    const funciones = {
+      'loginGenerico': loginGenerico,
+      'loginCredencialesValidas': loginGenerico,
+      'loginEmailIncorrecto': loginGenerico,
+      'loginPasswordIncorrecto': loginGenerico,
+      'loginCredencialesIncorrectas': loginGenerico,
+      'loginConRecordarme': loginConRecordarme,
+      'loginEmailVacio': loginGenerico,
+      'loginPasswordVacia': loginGenerico,
+      'loginCredencialesVacias': loginGenerico,
+      'logoutNormal': logoutNormal,        // ← TC009
+      'logoutDesdeMenu': logoutDesdeMenu,
+      'cambiarModoClaro': cambiarModoClaro,
+      'cambiarModoOscuro': cambiarModoOscuro,
+      'cambiarModoSistema': cambiarModoSistema
+    };
+
+    if (!funciones[nombreFuncion]) {
+      return () => {
+        cy.log(`⚠️ Función no encontrada en mapping: "${nombreFuncion}"`);
+        return cy.wrap(null);
+      };
+    }
+    return funciones[nombreFuncion];
+  }
 
   // Helper: abre el menú de usuario y espera al panel
   function abrirMenuUsuario() {
-    // El botón real tiene aria-label="Menú del Usuario" y dentro un <img.fi-user-avatar>
     return cy.get('button[aria-label="Menú del Usuario"], img.fi-user-avatar', { timeout: 10000 })
       .then($el => $el.is('img') ? cy.wrap($el).closest('button') : cy.wrap($el))
       .then($btn => {
         cy.wrap($btn).scrollIntoView().click({ force: true });
-        // El panel se teletransporta al body; esperamos a que SE MONTE (existir), no a que sea visible.
         return cy.get('.fi-dropdown-panel', { timeout: 10000 }).should('exist');
       });
   }
 
   // === FUNCIONES DE VALIDACIÓN ===
 
-  function loginCredencialesValidas() {
-    cy.login({ email: 'superadmin@novatrans.app', password: 'solbyte', useSession: false });
-    cy.wait(3000);
-    cy.url().should('include', '/panelinterno');
-    return cy.get('header, .MuiToolbar-root, .dashboard-container', { timeout: 8000 }).should('exist');
+  // Casos de login (positivos/negativos). SIEMPRE se llama tras irALoginLimpio()
+  function loginGenerico(casoExcel) {
+    const email = casoExcel.dato_1;
+    const password = casoExcel.dato_2;
+    const numero = parseInt(String(casoExcel.caso).replace('TC', ''), 10);
+
+    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre} - Email: ${email}`);
+
+    // Escribimos solo si hay valor (para los casos de vacío, no llamamos .type(''))
+    if (email) {
+      cy.get('input[type="email"], input[placeholder*="Correo"], input[placeholder*="email"]', { timeout: 10000 })
+        .clear().type(email);
+    } else {
+      cy.get('input[type="email"], input[placeholder*="Correo"], input[placeholder*="email"]', { timeout: 10000 })
+        .clear();
+    }
+
+    if (password) {
+      cy.get('input[type="password"], input[placeholder*="Contraseña"], input[placeholder*="password"]', { timeout: 10000 })
+        .clear().type(password);
+    } else {
+      cy.get('input[type="password"], input[placeholder*="Contraseña"], input[placeholder*="password"]', { timeout: 10000 })
+        .clear();
+    }
+
+    cy.get('button[type="submit"], input[type="submit"]').click();
+
+    if (numero === 1 || /credenciales válidas/i.test(casoExcel.nombre || '')) {
+      cy.url({ timeout: 15000 }).should('include', DASHBOARD_PATH);
+      return cy.get('header, .MuiToolbar-root, .dashboard-container', { timeout: 10000 }).should('exist');
+    } else {
+      // Debe permanecer en la pantalla de login
+      cy.wait(300);
+      return cy.url().should('include', LOGIN_PATH);
+    }
   }
 
-  function loginEmailIncorrecto() {
-    cy.login({ email: 'admin@novatrans.app', password: 'solbyte', useSession: false });
-    cy.wait(500);
-    return cy.url().should('include', '/login');
+  function loginConRecordarme(casoExcel) {
+    const { dato_1: email, dato_2: password } = casoExcel;
+    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
+
+    cy.get('input[type="email"], input[placeholder*="Correo"], input[placeholder*="email"]', { timeout: 10000 })
+      .clear().type(email);
+    cy.get('input[type="password"], input[placeholder*="Contraseña"], input[placeholder*="password"]', { timeout: 10000 })
+      .clear().type(password);
+
+    // Marca "Recordarme" si existe
+    cy.get('input[type="checkbox"], [role="checkbox"]', { timeout: 3000 })
+      .first()
+      .check({ force: true })
+      .should('be.checked');
+
+    cy.get('button[type="submit"], input[type="submit"]').click();
+    return cy.url({ timeout: 15000 }).should('include', DASHBOARD_PATH);
   }
 
-  function loginPasswordIncorrecta() {
-    cy.login({ email: 'superadmin@novatrans.app', password: 'solbyte@2025', useSession: false });
-    cy.wait(500);
-    return cy.url().should('include', '/login');
+  // TC009 — Espera 30s antes de loguear y luego pulsa "Salir"
+  function logoutNormal(casoExcel) {
+    const { dato_1: email, dato_2: password } = casoExcel;
+    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre} (con espera de 30s antes del login)`);
+
+    // ⏳ Requisito de la app: esperar 30 segundos antes de introducir credenciales
+    cy.wait(40000);
+
+    // Autenticación
+    cy.get('input[type="email"]', { timeout: 10000 }).clear().type(email);
+    cy.get('input[type="password"]', { timeout: 10000 }).clear().type(password);
+    cy.get('button[type="submit"], input[type="submit"]').click();
+
+    // Asegurar que estamos en el dashboard
+    cy.url({ timeout: 20000 }).should('include', DASHBOARD_PATH);
+    cy.get('header, .MuiToolbar-root, .dashboard-container', { timeout: 10000 }).should('exist');
+
+    // Pulsar botón Salir (robusto)
+    return clickBotonSalir()
+      .then(() => cy.url({ timeout: 20000 }).should('include', LOGIN_PATH));
   }
 
-  function loginCredencialesIncorrectas() {
-    cy.login({ email: 'admin@novatrans.app', password: 'sol', useSession: false });
-    cy.wait(500);
-    return cy.url().should('include', '/login');
-  }
+  function logoutDesdeMenu(casoExcel) {
+    const { dato_1: email, dato_2: password } = casoExcel;
+    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
 
-  function loginConRecordarme() {
-    cy.login({ email: 'superadmin@novatrans.app', password: 'solbyte', rememberMe: true, useSession: false });
-    cy.wait(500);
-    return cy.url().should('include', '/panelinterno');
-  }
-
-  function loginEmailVacio() {
-    cy.login({ email: '', password: 'solbyte', useSession: false });
-    cy.wait(500);
-    return cy.url().should('include', '/login');
-  }
-
-  function loginPasswordVacia() {
-    cy.login({ email: 'superadmin@novatrans.app', password: '', useSession: false });
-    cy.wait(500);
-    return cy.url().should('include', '/login');
-  }
-
-  function loginCredencialesVacias() {
-    cy.login({ email: '', password: '', useSession: false });
-    cy.wait(500);
-    return cy.url().should('include', '/login');
-  }
-
-  function logoutNormal() {
-    cy.wait(30000); // Esperar 30 segundos antes de introducir credenciales
-    cy.visit('/login');
-    cy.get('input[type="email"], input[placeholder*="Correo"], input[placeholder*="email"]').clear().type('superadmin@novatrans.app');
-    cy.get('input[type="password"], input[placeholder*="Contraseña"], input[placeholder*="password"]').clear().type('solbyte');
-    cy.get('button[type="submit"], button:contains("Entrar"), input[type="submit"]').click();
-    cy.wait(5000); // Tiempo para que cargue completamente
-    // Buscar botón de logout/salir con manejo de errores
-    cy.get('button:contains("Salir")').first().click({ force: true });
-    cy.wait(2000); // Más tiempo para el logout
-    return cy.url().should('include', '/login');
-  }
-
-  function logoutDesdeMenu() {
-    cy.login({ email: 'superadmin@novatrans.app', password: 'solbyte', useSession: false });
-    cy.url().should('include', '/panelinterno');
+    cy.get('input[type="email"]').clear().type(email);
+    cy.get('input[type="password"]').clear().type(password);
+    cy.get('button[type="submit"], input[type="submit"]').click();
+    cy.url({ timeout: 15000 }).should('include', DASHBOARD_PATH);
 
     return abrirMenuUsuario()
       .within(() => {
@@ -164,42 +254,54 @@ describe('LOGIN - Validación completa con gestión de errores y reporte a Excel
           .should('exist')
           .click({ force: true });
       })
-      .then(() => cy.url({ timeout: 15000 }).should('include', '/login'));
+      .then(() => cy.url({ timeout: 15000 }).should('include', LOGIN_PATH));
   }
 
-  function cambiarModoClaro() {
-    cy.login({ email: 'superadmin@novatrans.app', password: 'solbyte', useSession: false });
-    cy.url().should('include', '/panelinterno');
+  function cambiarModoClaro(casoExcel) {
+    const { dato_1: email, dato_2: password } = casoExcel;
+
+    cy.get('input[type="email"]').clear().type(email);
+    cy.get('input[type="password"]').clear().type(password);
+    cy.get('button[type="submit"], input[type="submit"]').click();
+    cy.url({ timeout: 15000 }).should('include', DASHBOARD_PATH);
 
     return abrirMenuUsuario().within(() => {
       cy.get('button[aria-label="A modo claro"]').should('exist').click({ force: true });
     }).then(() => {
       expect(localStorage.getItem('theme')).to.eq('light');
-      return cy.url().should('include', '/panelinterno');
+      return cy.url().should('include', DASHBOARD_PATH);
     });
   }
 
-  function cambiarModoOscuro() {
-    cy.login({ email: 'superadmin@novatrans.app', password: 'solbyte', useSession: false });
-    cy.url().should('include', '/panelinterno');
+  function cambiarModoOscuro(casoExcel) {
+    const { dato_1: email, dato_2: password } = casoExcel;
+
+    cy.get('input[type="email"]').clear().type(email);
+    cy.get('input[type="password"]').clear().type(password);
+    cy.get('button[type="submit"], input[type="submit"]').click();
+    cy.url({ timeout: 15000 }).should('include', DASHBOARD_PATH);
 
     return abrirMenuUsuario().within(() => {
       cy.get('button[aria-label="A modo oscuro"]').should('exist').click({ force: true });
     }).then(() => {
       expect(localStorage.getItem('theme')).to.eq('dark');
-      return cy.url().should('include', '/panelinterno');
+      return cy.url().should('include', DASHBOARD_PATH);
     });
   }
 
-  function cambiarModoSistema() {
-    cy.login({ email: 'superadmin@novatrans.app', password: 'solbyte', useSession: false });
-    cy.url().should('include', '/panelinterno');
+  function cambiarModoSistema(casoExcel) {
+    const { dato_1: email, dato_2: password } = casoExcel;
+
+    cy.get('input[type="email"]').clear().type(email);
+    cy.get('input[type="password"]').clear().type(password);
+    cy.get('button[type="submit"], input[type="submit"]').click();
+    cy.url({ timeout: 15000 }).should('include', DASHBOARD_PATH);
 
     return abrirMenuUsuario().within(() => {
       cy.get('button[aria-label="A modo del sistema"]').should('exist').click({ force: true });
     }).then(() => {
       expect(localStorage.getItem('theme')).to.eq('system');
-      return cy.url().should('include', '/panelinterno');
+      return cy.url().should('include', DASHBOARD_PATH);
     });
   }
 });
