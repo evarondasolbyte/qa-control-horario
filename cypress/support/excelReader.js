@@ -25,16 +25,25 @@ function parseCsvRespectingQuotes(csv) {
 
 const safe = (v) => (v ?? '').toString().trim();
 
-Cypress.Commands.add('leerDatosGoogleSheets', () => {
+Cypress.Commands.add('leerDatosGoogleSheets', (pantalla) => {
   cy.log('🚀 NUEVO PARSER CSV - Intentando leer datos desde Google Sheets (CSV público)...');
 
-  // IDs de tu documento y la hoja LOGIN
+  // IDs de tu documento
   const spreadsheetId = '1SrfWzbyPDnNsCd5AKrInQAvOG-wgUW9sWqH6Z7VPdXY';
-  const gid = '1362476451'; // Hoja LOGIN
+  
+  // Mapeo de gid por hoja/pantalla (según pestañas del Excel)
+  const gidMap = {
+    'datos': '0',              // Hoja Datos (primera hoja)
+    'login': '1362476451',     // Hoja LOGIN
+    'empresas': '1194727364'   // Hoja EMPRESAS (según la URL de la imagen)
+  };
+  
+  const pantallaNormalizada = (pantalla || 'datos').toLowerCase();
+  const gid = gidMap[pantallaNormalizada] || '0';
   const range = 'A:M';
   const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${gid}&range=${encodeURIComponent(range)}`;
 
-  cy.log(`🔍 Leyendo hoja LOGIN (gid=${gid}) desde: ${csvUrl}`);
+  cy.log(`🔍 Leyendo hoja ${pantalla} (gid=${gid}) desde: ${csvUrl}`);
 
   return cy.request({ method: 'GET', url: csvUrl, failOnStatusCode: false }).then((response) => {
     if (response.status === 200 && response.body) {
@@ -62,7 +71,7 @@ Cypress.Commands.add('leerDatosGoogleSheets', () => {
 Cypress.Commands.add('obtenerDatosExcel', (pantalla) => {
   const pantallaSafe = safe(pantalla).toLowerCase();
 
-  return cy.leerDatosGoogleSheets().then((filasExcel) => {
+  return cy.leerDatosGoogleSheets(pantalla).then((filasExcel) => {
     if (!filasExcel || filasExcel.length === 0) {
       cy.log('❌ No se pudieron leer datos del Excel');
       return cy.wrap([]);
