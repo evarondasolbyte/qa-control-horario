@@ -35,7 +35,8 @@ Cypress.Commands.add('leerDatosGoogleSheets', (pantalla) => {
   const gidMap = {
     'datos': '0',              // Hoja Datos (primera hoja)
     'login': '1362476451',     // Hoja LOGIN
-    'empresas': '1194727364'   // Hoja EMPRESAS (según la URL de la imagen)
+    'empresas': '1194727364',  // Hoja EMPRESAS
+    'departamentos': '403068141' // Hoja DEPARTAMENTOS (según la URL de la imagen)
   };
   
   const pantallaNormalizada = (pantalla || 'datos').toLowerCase();
