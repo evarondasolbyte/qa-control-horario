@@ -8,7 +8,12 @@
     "cypress:run": "cypress run",
     "test": "cypress run"
   },
-  "keywords": ["cypress", "testing", "control-horario", "qa"],
+  "keywords": [
+    "cypress",
+    "testing",
+    "control-horario",
+    "qa"
+  ],
   "author": "QA Team",
   "license": "ISC",
   "dependencies": {
@@ -20,8 +25,6 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "cypress": "^14.5.0"
+    "cypress": "^14.5.4"
   }
 }
-
-

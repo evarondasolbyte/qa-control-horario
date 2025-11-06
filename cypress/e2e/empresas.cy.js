@@ -185,11 +185,20 @@ describe('EMPRESAS - Validación completa con gestión de errores y reporte a Ex
       'mostrarColumnaCreatedAt': mostrarColumnaCreatedAt,
       'mostrarColumnaUpdatedAt': mostrarColumnaUpdatedAt,
       'mostrarColumnaDeletedAt': mostrarColumnaDeletedAt,
+      'mostrarColumnaContacto': mostrarColumnaContacto,
+      'mostrarColumnaEmail': mostrarColumnaEmail,
+      'mostrarColumnaTelefono': mostrarColumnaTelefono,
       
       // Funciones de ordenar
       'ordenarCreatedAt': ordenarCreatedAt,
       'ordenarUpdatedAt': ordenarUpdatedAt,
-      'ordenarDeletedAt': ordenarDeletedAt
+      'ordenarDeletedAt': ordenarDeletedAt,
+      'ordenarNombre': ordenarNombre,
+      'ordenarCIF': ordenarCIF,
+      'ordenarActualizado': ordenarActualizado,
+      
+      // Funciones de filtros
+      'soloActivas': soloActivas
     };
 
     if (!funciones[nombreFuncion]) {
@@ -350,6 +359,45 @@ describe('EMPRESAS - Validación completa con gestión de errores y reporte a Ex
     return cy.get('.fi-ta-header-cell').should('be.visible');
   }
 
+  function mostrarColumnaContacto(casoExcel) {
+    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
+    cy.get('button[title*="Alternar columnas"], button[aria-label*="columns"], .fi-ta-col-toggle button').first().click({ force: true });
+    cy.wait(500);
+    // Buscar el label que contiene "Contacto" y hacer click en el input dentro
+    cy.contains('label', 'Contacto', { timeout: 5000 })
+      .should('be.visible')
+      .within(() => {
+        cy.get('input[type="checkbox"]').click({ force: true });
+      });
+    return cy.get('.fi-ta-header-cell').should('be.visible');
+  }
+
+  function mostrarColumnaEmail(casoExcel) {
+    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
+    cy.get('button[title*="Alternar columnas"], button[aria-label*="columns"], .fi-ta-col-toggle button').first().click({ force: true });
+    cy.wait(500);
+    // Buscar el label que contiene "Email" y hacer click en el input dentro
+    cy.contains('label', 'Email', { timeout: 5000 })
+      .should('be.visible')
+      .within(() => {
+        cy.get('input[type="checkbox"]').click({ force: true });
+      });
+    return cy.get('.fi-ta-header-cell').should('be.visible');
+  }
+
+  function mostrarColumnaTelefono(casoExcel) {
+    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
+    cy.get('button[title*="Alternar columnas"], button[aria-label*="columns"], .fi-ta-col-toggle button').first().click({ force: true });
+    cy.wait(500);
+    // Buscar el label que contiene "Teléfono" y hacer click en el input dentro
+    cy.contains('label', /Teléfono|Telefono|Phone/i, { timeout: 5000 })
+      .should('be.visible')
+      .within(() => {
+        cy.get('input[type="checkbox"]').click({ force: true });
+      });
+    return cy.get('.fi-ta-header-cell').should('be.visible');
+  }
+
   function ordenarCreatedAt(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
     cy.get('button[title*="Alternar columnas"], button[aria-label*="columns"], .fi-ta-col-toggle button').first().click({ force: true });
@@ -386,6 +434,100 @@ describe('EMPRESAS - Validación completa con gestión de errores y reporte a Ex
     return cy.get('.fi-ta-row').should('exist');
   }
 
+  function ordenarNombre(casoExcel) {
+    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
+    cy.contains('th, .fi-ta-header-cell', 'Nombre', { timeout: 10000 }).should('be.visible');
+    cy.contains('th, .fi-ta-header-cell', 'Nombre').click({ force: true });
+    cy.wait(500);
+    cy.contains('th, .fi-ta-header-cell', 'Nombre').click({ force: true });
+    return cy.get('.fi-ta-row').should('exist');
+  }
+
+  function ordenarCIF(casoExcel) {
+    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
+    cy.contains('th, .fi-ta-header-cell', 'CIF', { timeout: 10000 }).should('be.visible');
+    cy.contains('th, .fi-ta-header-cell', 'CIF').click({ force: true });
+    cy.wait(500);
+    cy.contains('th, .fi-ta-header-cell', 'CIF').click({ force: true });
+    return cy.get('.fi-ta-row').should('exist');
+  }
+
+  function ordenarActualizado(casoExcel) {
+    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
+    // Primero mostrar la columna "Actualizado el" si no está visible
+    cy.get('button[title*="Alternar columnas"], button[aria-label*="columns"], .fi-ta-col-toggle button').first().click({ force: true });
+    cy.wait(500);
+    // Verificar si el checkbox ya está marcado, si no lo está, marcarlo
+    cy.contains('label', /Actualizado el|Updated at/i, { timeout: 5000 })
+      .should('be.visible')
+      .within(() => {
+        cy.get('input[type="checkbox"]').then(($checkbox) => {
+          if (!$checkbox.is(':checked')) {
+            cy.wrap($checkbox).click({ force: true });
+          }
+        });
+      });
+    cy.wait(500);
+    // Luego ordenar por esa columna
+    cy.contains('th, .fi-ta-header-cell', 'Actualizado el', { timeout: 10000 }).should('be.visible');
+    cy.contains('th, .fi-ta-header-cell', 'Actualizado el').click({ force: true });
+    cy.wait(500);
+    cy.contains('th, .fi-ta-header-cell', 'Actualizado el').click({ force: true });
+    return cy.get('.fi-ta-row').should('exist');
+  }
+
+  function soloActivas(casoExcel) {
+    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
+    
+    // 1. Hacer clic en el icono del filtro (botón con title="Filtrar")
+    cy.log('Abriendo menú de filtros...');
+    cy.get('button[title="Filtrar"], button[title*="Filtrar"], button[aria-label*="Filtrar"]', { timeout: 10000 })
+      .should('be.visible')
+      .scrollIntoView()
+      .click({ force: true });
+    
+    cy.wait(1000);
+    
+    // 2. Esperar a que se abra el menú de filtros
+    cy.get('.fi-dropdown-panel, [role="dialog"], .fi-modal', { timeout: 10000 }).should('be.visible');
+    
+    // 3. Seleccionar "Activas" en el dropdown de "Estado"
+    // El select tiene id="tableFilters.is_active.value" según las imágenes
+    cy.log('Seleccionando "Activas" en el filtro de Estado...');
+    
+    // Intentar encontrar el select por ID primero
+    cy.get('body').then($body => {
+      const $selectById = $body.find('select#tableFilters\\.is_active\\.value, select[id*="tableFilters"][id*="is_active"]');
+      
+      if ($selectById.length > 0) {
+        // Encontrado por ID, seleccionar "Activas" por texto
+        cy.wrap($selectById.first())
+          .should('be.visible')
+          .scrollIntoView()
+          .select('Activas', { force: true });
+      } else {
+        // Buscar por el label "Estado" y luego el select
+        cy.contains('label, span, div, p', 'Estado', { timeout: 5000 })
+          .should('be.visible')
+          .then($label => {
+            cy.wrap($label).closest('div, form, section, fieldset').within(() => {
+              cy.get('select', { timeout: 5000 })
+                .first()
+                .should('be.visible')
+                .scrollIntoView()
+                .select('Activas', { force: true });
+            });
+          });
+      }
+    });
+    
+    cy.wait(2000);
+    
+    // 4. Verificar que se muestran solo activas (verificar que hay filas visibles)
+    cy.log('Verificando que se muestran solo empresas activas...');
+    return cy.get('.fi-ta-row:visible, tr:visible').should('have.length.greaterThan', 0);
+  }
+
   // ===== FUNCIONES QUE USAN DATOS DEL EXCEL =====
 
   function ejecutarBusquedaIndividual(casoExcel) {
@@ -410,7 +552,7 @@ describe('EMPRESAS - Validación completa con gestión de errores y reporte a Ex
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
     
     let nombre = casoExcel.dato_1 || '';
-    let nif = casoExcel.dato_2 || '';
+    let cif = casoExcel.dato_2 || '';
     const numero = parseInt(String(casoExcel.caso).replace('TC', ''), 10);
 
       // Si el nombre contiene "prueba1+", usar el contador
@@ -423,16 +565,16 @@ describe('EMPRESAS - Validación completa con gestión de errores y reporte a Ex
         nombre = nombre.replace('prueba1+', 'prueba1');
       }
 
-      // Si el NIF contiene "nif1+", usar el contador
-      // EXCEPCIÓN: TC017 (duplicado) siempre usa "nif1" fijo
-    if (nif.includes('nif1+') && numero !== 17) {
-        nif = nif.replace('nif1+', `nif${contadorPrueba}`);
-    } else if (nif.includes('nif1+') && numero === 17) {
-        // TC017: usar "nif1" fijo para duplicado
-        nif = nif.replace('nif1+', 'nif1');
+      // Si el CIF contiene "cif1+", usar el contador
+      // EXCEPCIÓN: TC017 (duplicado) siempre usa "cif1" fijo
+    if (cif.includes('cif1+') && numero !== 17) {
+        cif = cif.replace('cif1+', `cif${contadorPrueba}`);
+    } else if (cif.includes('cif1+') && numero === 17) {
+        // TC017: usar "cif1" fijo para duplicado
+        cif = cif.replace('cif1+', 'cif1');
       }
 
-    cy.log(`Crear empresa con nombre="${nombre}", nif="${nif}"`);
+    cy.log(`Crear empresa con nombre="${nombre}", cif="${cif}"`);
 
     // Solo hacer click en "Crear Empresa" si no estamos ya en el formulario
     cy.url().then((url) => {
@@ -458,11 +600,11 @@ describe('EMPRESAS - Validación completa con gestión de errores y reporte a Ex
         .clear({ force: true });
     }
     
-    if (nif && numero !== 20) {
-      cy.get('input[name="data.nif"], input#data\\.nif, input[placeholder*="NIF"]', { timeout: 10000 })
+    if (cif && numero !== 20) {
+      cy.get('input[name="data.cif"], input#data\\.cif, input[placeholder*="CIF"]', { timeout: 10000 })
         .scrollIntoView()
         .clear({ force: true })
-        .type(nif, { force: true });
+        .type(cif, { force: true });
     }
 
     if (numero === 19) {
@@ -491,7 +633,7 @@ describe('EMPRESAS - Validación completa con gestión de errores y reporte a Ex
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
     
     let nombre = casoExcel.dato_1 || '';
-    let nif = casoExcel.dato_2 || '';
+    let cif = casoExcel.dato_2 || '';
     const numero = parseInt(String(casoExcel.caso).replace('TC', ''), 10);
 
       // Si el nombre contiene "prueba1+", usar el contador
@@ -500,12 +642,12 @@ describe('EMPRESAS - Validación completa con gestión de errores y reporte a Ex
       contadorPrueba++;
       }
 
-      // Si el NIF contiene "nif1+", usar el contador
-    if (nif.includes('nif1+')) {
-        nif = nif.replace('nif1+', `nif${contadorPrueba}`);
+      // Si el CIF contiene "cif1+", usar el contador
+    if (cif.includes('cif1+')) {
+        cif = cif.replace('cif1+', `cif${contadorPrueba}`);
       }
 
-    cy.log(`Editar empresa con nombre="${nombre}", nif="${nif}"`);
+    cy.log(`Editar empresa con nombre="${nombre}", cif="${cif}"`);
 
     cy.get('.fi-ta-table, table').scrollTo('right', { ensureScrollable: false });
     cy.wait(500);
@@ -520,11 +662,11 @@ describe('EMPRESAS - Validación completa con gestión de errores y reporte a Ex
         .clear({ force: true })
         .type(nombre, { force: true });
     }
-    if (nif) {
-      cy.get('input[name="data.nif"], input#data\\.nif, input[placeholder*="NIF"]', { timeout: 10000 })
+    if (cif) {
+      cy.get('input[name="data.cif"], input#data\\.cif, input[placeholder*="CIF"]', { timeout: 10000 })
         .scrollIntoView()
         .clear({ force: true })
-        .type(nif, { force: true });
+        .type(cif, { force: true });
     }
 
     cy.get('button:contains("Guardar"), input[type="submit"]').first().click({ force: true });
