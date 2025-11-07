@@ -52,12 +52,12 @@ describe('DEPARTAMENTOS - Validación completa con gestión de errores y reporte
         cy.visit(DEPARTAMENTOS_URL_ABS, { failOnStatusCode: false });
         cy.url({ timeout: 15000 }).should('include', DEPARTAMENTOS_PATH);
         cy.get('.fi-ta-table, table', { timeout: 15000 }).should('exist');
-        
+
         // Cerrar panel lateral
         cy.log('🔄 Intentando cerrar panel lateral...');
         cy.wait(500);
         cy.get('.fi-ta-table, table').click({ force: true });
-        
+
         return cy.get('.fi-ta-table, table').should('be.visible');
       } else {
         // No hay sesión, hacer login primero
@@ -65,17 +65,17 @@ describe('DEPARTAMENTOS - Validación completa con gestión de errores y reporte
         cy.login({ email: 'superadmin@novatrans.app', password: 'solbyte', useSession: false });
         cy.url({ timeout: 15000 }).should('include', DASHBOARD_PATH);
         cy.wait(2000);
-        
+
         // Luego ir a Departamentos
         cy.visit(DEPARTAMENTOS_URL_ABS, { failOnStatusCode: false });
         cy.url({ timeout: 15000 }).should('include', DEPARTAMENTOS_PATH);
         cy.get('.fi-ta-table, table', { timeout: 15000 }).should('exist');
-        
+
         // Cerrar panel lateral
         cy.log('🔄 Intentando cerrar panel lateral...');
         cy.wait(500);
         cy.get('.fi-ta-table, table').click({ force: true });
-        
+
         return cy.get('.fi-ta-table, table').should('be.visible');
       }
     });
@@ -84,14 +84,14 @@ describe('DEPARTAMENTOS - Validación completa con gestión de errores y reporte
   // === Ejecuta 1 caso: SIEMPRE arranca desde /panelinterno/departamentos ===
   function ejecutarCaso(casoExcel, idx) {
     const numero = parseInt(String(casoExcel.caso).replace('TC', ''), 10) || (idx + 1);
-    const nombre  = `${casoExcel.caso} - ${casoExcel.nombre}`;
-    
+    const nombre = `${casoExcel.caso} - ${casoExcel.nombre}`;
+
     cy.log('────────────────────────────────────────────────────────');
     cy.log(`▶️ ${nombre} [${casoExcel.prioridad || 'SIN PRIORIDAD'}]`);
     cy.log(`🔍 DEBUG: Función solicitada del Excel: "${casoExcel.funcion}"`);
-    
+
     const funcion = obtenerFuncionPorNombre(casoExcel.funcion);
-    
+
     if (idx > 0) cy.wait(600);
     cy.resetearFlagsTest();
 
@@ -105,14 +105,14 @@ describe('DEPARTAMENTOS - Validación completa con gestión de errores y reporte
             // TC018 debe ser WARNING si es departamento duplicado
             let resultado = 'OK';
             let obtenido = 'Comportamiento correcto';
-            
+
             if (numero === 18) {
               // Verificar si hay mensaje de duplicado
               cy.get('body').then(($body) => {
                 const hasErrorMessage = $body.text().includes('duplicad') || $body.text().includes('ya existe') || $body.text().includes('duplicate');
                 resultado = hasErrorMessage ? 'OK' : 'WARNING';
                 obtenido = hasErrorMessage ? 'Mensaje de duplicado mostrado correctamente' : 'Error de servidor (debería mostrar mensaje de duplicado)';
-                
+
                 cy.registrarResultados({
                   numero,
                   nombre,
@@ -167,12 +167,20 @@ describe('DEPARTAMENTOS - Validación completa con gestión de errores y reporte
       'editarAbrirFormulario': editarAbrirFormulario,
       'ejecutarEditarIndividual': ejecutarEditarIndividual,
       'editarCancelar': editarCancelar,
+      'verDepartamento': verDepartamento,
       'mostrarColumnaCreatedAt': mostrarColumnaCreatedAt,
       'mostrarColumnaUpdatedAt': mostrarColumnaUpdatedAt,
       'mostrarColumnaDeletedAt': mostrarColumnaDeletedAt,
+      'mostrarColumnaEmpleados': mostrarColumnaEmpleados,
+      'mostrarColumnaCreado': mostrarColumnaCreado,
+      'mostrarColumnaActualizado': mostrarColumnaActualizado,
       'ordenarCreatedAt': ordenarCreatedAt,
       'ordenarUpdatedAt': ordenarUpdatedAt,
-      'ordenarDeletedAt': ordenarDeletedAt
+      'ordenarDeletedAt': ordenarDeletedAt,
+      'ordenarNombre': ordenarNombre,
+      'ordenarEmpleados': ordenarEmpleados,
+      'ordenarCreado': ordenarCreado,
+      'filtrarEmpresa': filtrarEmpresa
     };
 
     if (!funciones[nombreFuncion]) {
@@ -191,7 +199,7 @@ describe('DEPARTAMENTOS - Validación completa con gestión de errores y reporte
   function ejecutarBusquedaIndividual(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
     const valorBusqueda = casoExcel.dato_1;
-    
+
     cy.log(`Aplicando búsqueda: ${valorBusqueda}`);
     cy.get('input[placeholder*="Buscar"], input[placeholder*="Search"]').should('be.visible').clear({ force: true }).type(`${valorBusqueda}{enter}`, { force: true });
     cy.wait(2000);
@@ -217,12 +225,12 @@ describe('DEPARTAMENTOS - Validación completa con gestión de errores y reporte
   function limpiarBusqueda(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
     const valorBusqueda = casoExcel.dato_1;
-    
+
     // Primero buscar el valor del Excel
     cy.log(`Aplicando búsqueda: ${valorBusqueda}`);
     cy.get('input[placeholder*="Buscar"], input[placeholder*="Search"]').should('be.visible').clear({ force: true }).type(`${valorBusqueda}{enter}`, { force: true });
     cy.wait(2000);
-    
+
     // Luego limpiar la búsqueda
     cy.log('Limpiando filtro...');
     cy.get('body').then($body => {
@@ -232,7 +240,7 @@ describe('DEPARTAMENTOS - Validación completa con gestión de errores y reporte
         cy.get('input[placeholder*="Buscar"], input[placeholder*="Search"]').clear();
       }
     });
-    
+
     // Verificar que el input esté vacío
     return cy.get('input[placeholder*="Buscar"], input[placeholder*="Search"]').should('have.value', '');
   }
@@ -291,21 +299,22 @@ describe('DEPARTAMENTOS - Validación completa con gestión de errores y reporte
 
   function ordenarCompany(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-    cy.contains('th, .fi-ta-header-cell', 'Company').click({ force: true });
+    cy.contains('th, .fi-ta-header-cell', /Empresa|Company/i, { timeout: 10000 }).should('be.visible');
+    cy.contains('th, .fi-ta-header-cell', /Empresa|Company/i).click({ force: true });
     cy.wait(500);
-    cy.contains('th, .fi-ta-header-cell', 'Company').click({ force: true });
+    cy.contains('th, .fi-ta-header-cell', /Empresa|Company/i).click({ force: true });
     return cy.get('.fi-ta-row').should('exist');
   }
 
   function abrirFormularioCrear(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-    cy.get('a:contains("Crear"), button:contains("Crear")').first().click({ force: true });
+    cy.get('a:contains("Crear Departamento"), button:contains("Crear Departamento"), a:contains("Crear"), button:contains("Crear")').first().click({ force: true });
     return cy.url().should('include', '/departamentos/create');
   }
 
   function crearCancelar(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-    cy.get('a:contains("Crear"), button:contains("Crear")').first().click({ force: true });
+    cy.get('a:contains("Crear Departamento"), button:contains("Crear Departamento"), a:contains("Crear"), button:contains("Crear")').first().click({ force: true });
     cy.url().should('include', '/departamentos/create');
     cy.get('button:contains("Cancelar")').first().click({ force: true });
     return cy.url().should('include', '/departamentos');
@@ -331,6 +340,19 @@ describe('DEPARTAMENTOS - Validación completa con gestión de errores y reporte
     cy.url().should('include', '/departamentos/');
     cy.get('button:contains("Cancelar")').first().click({ force: true });
     return cy.url().should('include', '/departamentos');
+  }
+
+  function verDepartamento(casoExcel) {
+    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
+    cy.get('.fi-ta-table, table').scrollTo('right', { ensureScrollable: false });
+    cy.wait(500);
+    cy.get('.fi-ta-row:visible').first().within(() => {
+      cy.get('a:contains("Ver"), button:contains("Ver")').first().click({ force: true });
+    });
+    cy.wait(1000);
+    // Verificar que se abre el modal con "Vista de departamento"
+    cy.contains('Vista de departamento', { timeout: 10000 }).should('be.visible');
+    return cy.get('.fi-modal, [role="dialog"]').should('be.visible');
   }
 
   function mostrarColumnaCreatedAt(casoExcel) {
@@ -393,11 +415,215 @@ describe('DEPARTAMENTOS - Validación completa con gestión de errores y reporte
     return cy.get('.fi-ta-row').should('exist');
   }
 
+  function mostrarColumnaEmpleados(casoExcel) {
+    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
+    cy.get('button[title*="Alternar columnas"], button[aria-label*="columns"], .fi-ta-col-toggle button').first().click({ force: true });
+    cy.wait(500);
+    // Buscar el label que contiene "Empleados" y hacer click en el input dentro
+    cy.contains('label', 'Empleados', { timeout: 5000 })
+      .should('be.visible')
+      .within(() => {
+        cy.get('input[type="checkbox"]').click({ force: true });
+      });
+    return cy.get('.fi-ta-header-cell').should('be.visible');
+  }
+
+  function mostrarColumnaCreado(casoExcel) {
+    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
+    cy.get('button[title*="Alternar columnas"], button[aria-label*="columns"], .fi-ta-col-toggle button').first().click({ force: true });
+    cy.wait(500);
+    // Buscar el label que contiene "Creado" y hacer click en el input dentro
+    cy.contains('label', /Creado|Created at/i, { timeout: 5000 })
+      .should('be.visible')
+      .within(() => {
+        cy.get('input[type="checkbox"]').click({ force: true });
+      });
+    return cy.get('.fi-ta-header-cell').should('be.visible');
+  }
+
+  function mostrarColumnaActualizado(casoExcel) {
+    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
+    cy.get('button[title*="Alternar columnas"], button[aria-label*="columns"], .fi-ta-col-toggle button').first().click({ force: true });
+    cy.wait(500);
+    // Buscar el label que contiene "Actualizado" y hacer click en el input dentro
+    cy.contains('label', /Actualizado|Updated at/i, { timeout: 5000 })
+      .should('be.visible')
+      .within(() => {
+        cy.get('input[type="checkbox"]').click({ force: true });
+      });
+    return cy.get('.fi-ta-header-cell').should('be.visible');
+  }
+
+  function ordenarNombre(casoExcel) {
+    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
+    cy.contains('th, .fi-ta-header-cell', 'Nombre', { timeout: 10000 }).should('be.visible');
+    cy.contains('th, .fi-ta-header-cell', 'Nombre').click({ force: true });
+    cy.wait(500);
+    cy.contains('th, .fi-ta-header-cell', 'Nombre').click({ force: true });
+    return cy.get('.fi-ta-row').should('exist');
+  }
+
+  function ordenarEmpleados(casoExcel) {
+    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
+    // Primero mostrar la columna "Empleados" si no está visible
+    cy.get('button[title*="Alternar columnas"], button[aria-label*="columns"], .fi-ta-col-toggle button').first().click({ force: true });
+    cy.wait(500);
+    // Verificar si el checkbox ya está marcado, si no lo está, marcarlo
+    cy.contains('label', 'Empleados', { timeout: 5000 })
+      .should('be.visible')
+      .within(() => {
+        cy.get('input[type="checkbox"]').then(($checkbox) => {
+          if (!$checkbox.is(':checked')) {
+            cy.wrap($checkbox).click({ force: true });
+          }
+        });
+      });
+    cy.wait(500);
+    // Luego ordenar por esa columna
+    cy.contains('th, .fi-ta-header-cell', 'Empleados', { timeout: 10000 }).should('be.visible');
+    cy.contains('th, .fi-ta-header-cell', 'Empleados').click({ force: true });
+    cy.wait(500);
+    cy.contains('th, .fi-ta-header-cell', 'Empleados').click({ force: true });
+    return cy.get('.fi-ta-row').should('exist');
+  }
+
+  function ordenarCreado(casoExcel) {
+    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
+    // Primero mostrar la columna "Creado" si no está visible
+    cy.get('button[title*="Alternar columnas"], button[aria-label*="columns"], .fi-ta-col-toggle button').first().click({ force: true });
+    cy.wait(500);
+    // Verificar si el checkbox ya está marcado, si no lo está, marcarlo
+    cy.contains('label', /Creado|Created at/i, { timeout: 5000 })
+      .should('be.visible')
+      .within(() => {
+        cy.get('input[type="checkbox"]').then(($checkbox) => {
+          if (!$checkbox.is(':checked')) {
+            cy.wrap($checkbox).click({ force: true });
+          }
+        });
+      });
+    cy.wait(500);
+    // Luego ordenar por esa columna
+    cy.contains('th, .fi-ta-header-cell', /Creado|Created at/i, { timeout: 10000 }).should('be.visible');
+    cy.contains('th, .fi-ta-header-cell', /Creado|Created at/i).click({ force: true });
+    cy.wait(500);
+    cy.contains('th, .fi-ta-header-cell', /Creado|Created at/i).click({ force: true });
+    return cy.get('.fi-ta-row').should('exist');
+  }
+
+  function filtrarEmpresa(casoExcel) {
+    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
+
+    // 0) Limpieza: cerrar overlays/menús y el panel lateral
+    cy.get('body').type('{esc}{esc}');
+    cy.wait(150);
+    cy.get('.fi-ta-table, table').first().click({ force: true });
+
+    // 1) Abrir el menú de filtros (icono con title/aria-label "Filtrar")
+    cy.log('Abriendo menú de filtros...');
+    cy.get('button[title*="Filtrar"], [aria-label*="Filtrar"], button[title*="Filter"], [aria-label*="Filter"]', { timeout: 10000 })
+      .filter(':visible')
+      .first()
+      .scrollIntoView()
+      .click({ force: true });
+
+    // 2) Panel visible
+    cy.get('.fi-dropdown-panel:visible, [role="dialog"]:visible, .fi-modal:visible', { timeout: 10000 })
+      .as('panel')
+      .should('be.visible');
+
+    // 3) Bloque "Empresa"
+    cy.get('@panel').within(() => {
+      cy.contains('label, span, div, p', /Empresa/i, { timeout: 10000 })
+        .should('be.visible')
+        .closest('div, fieldset, section')
+        .as('bloqueEmpresa');
+    });
+
+    // 4) Intento A: <select> nativo
+    cy.get('@bloqueEmpresa').then($bloque => {
+      const $select = $bloque.find('select:visible');
+      if ($select.length) {
+        cy.wrap($select).first().select('Admin', { force: true });
+        return;
+      }
+
+      // 5) Intento B: abrir el control "custom" (combobox/listbox/botón/etc.)
+      //   Heurísticos de apertura (intentamos varios; el primero que exista gana)
+      const openers = [
+        '[role="combobox"]:visible',
+        '[aria-haspopup="listbox"]:visible',
+        '[aria-expanded]:visible',
+        'button:visible',
+        '[role="button"]:visible',
+        '.fi-select-trigger:visible',
+        '.fi-input:visible',
+        '.fi-field:visible',
+        '.fi-input-wrp:visible',
+        '.fi-fo-field-wrp:visible'
+      ];
+
+      let opened = false;
+      for (const sel of openers) {
+        const $el = $bloque.find(sel).first();
+        if ($el.length) {
+          cy.wrap($el).scrollIntoView().click({ force: true });
+          opened = true;
+          break;
+        }
+      }
+
+      // 5b) Si no encontramos nada "clicable", clic centrado al contenedor del campo
+      if (!opened) {
+        cy.wrap($bloque).scrollIntoView().click('center', { force: true });
+      }
+
+      // 6) Esperar “Cargando...” si aparece
+      cy.get('body').then($b => {
+        if ($b.text().includes('Cargando...')) {
+          cy.contains('Cargando...', { timeout: 15000 }).should('not.exist');
+        }
+      });
+
+      // 7) Seleccionar "Admin" en cualquier desplegable visible
+      //    Buscamos primero opciones accesibles, luego cualquier item con el texto
+      cy.log('Seleccionando opción "Admin"...');
+
+      // Candidatos de contenedores de opciones
+      const dropdownScopes =
+        '.fi-dropdown-panel:visible, .fi-select-panel:visible, [role="listbox"]:visible, .choices__list--dropdown:visible, .fi-dropdown:visible, ul:visible, div[role="menu"]:visible';
+
+      cy.get('body').then($body => {
+        // (i) Con role="option"
+        if ($body.find('[role="option"]:visible').length) {
+          cy.contains('[role="option"]:visible', /Admin/i, { timeout: 10000 }).click({ force: true });
+        } else {
+          // (ii) Dentro de cualquier contenedor de opciones visible
+          cy.get(dropdownScopes, { timeout: 10000 }).first().within(() => {
+            cy.contains(':visible', /Admin/i, { timeout: 10000 }).click({ force: true });
+          });
+        }
+      });
+    });
+
+    // 8) Cerrar el panel si siguiera abierto (clic fuera)
+    cy.get('@panel').then($p => {
+      if ($p.is(':visible')) {
+        cy.get('.fi-ta-table, table').first().click({ force: true });
+      }
+    });
+
+    // 9) Validación mínima (hay filas)
+    cy.log('Verificando resultados filtrados por "Admin"...');
+    return cy.get('.fi-ta-row:visible, tr:visible', { timeout: 10000 })
+      .should('have.length.greaterThan', 0);
+  }
+
   // ===== FUNCIONES QUE USAN DATOS DEL EXCEL =====
 
   function ejecutarCrearIndividual(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-    
+
     const empresa = casoExcel.dato_1 || '';
     let nombre = casoExcel.dato_2 || '';
     const descripcion = casoExcel.dato_3 || '';
@@ -415,24 +641,41 @@ describe('DEPARTAMENTOS - Validación completa con gestión de errores y reporte
 
     cy.log(`Crear departamento con empresa="${empresa}", nombre="${nombre}", descripcion="${descripcion}"`);
 
-    // Solo hacer click en "Crear" si no estamos ya en el formulario
+    // Solo hacer click en "Crear Departamento" si no estamos ya en el formulario
     cy.url().then((url) => {
       if (!url.includes('/departamentos/create')) {
-        cy.get('a:contains("Crear"), button:contains("Crear")').first().click({ force: true });
+        cy.get('a:contains("Crear Departamento"), button:contains("Crear Departamento"), a:contains("Crear"), button:contains("Crear")').first().click({ force: true });
         cy.wait(1000);
       }
     });
-    
+
     cy.url({ timeout: 10000 }).should('include', '/departamentos/');
 
     // Rellenar campos con scrollIntoView y force: true
     // TC021/TC022: No rellenar ciertos campos para probar validación
     if (empresa && numero !== 21) {
-      cy.get('select#data\\.company_id, select[name="data.company_id"]', { timeout: 10000 })
+      // El select está oculto por Choices.js, interactuar con el componente visible
+      // Buscar directamente el componente Choices.js visible y hacer click
+      cy.get('.choices[data-type="select-one"]', { timeout: 10000 })
+        .first()
+        .should('be.visible')
         .scrollIntoView()
-        .select(empresa, { force: true });
+        .click({ force: true });
+
+      // Esperar a que cargue el dropdown y aparezcan las opciones
+      cy.wait(3000);
+
+      // Buscar y hacer click en la opción que contiene el texto de la empresa
+      cy.get('.choices__list--dropdown .choices__item, .choices__list .choices__item', { timeout: 15000 })
+        .contains(empresa, { matchCase: false })
+        .should('be.visible')
+        .scrollIntoView()
+        .click({ force: true });
+
+      // Esperar a que se seleccione
+      cy.wait(1000);
     }
-    
+
     if (nombre && numero !== 22) {
       cy.get('input[name="data.name"], input#data\\.name', { timeout: 10000 })
         .scrollIntoView()
@@ -444,11 +687,11 @@ describe('DEPARTAMENTOS - Validación completa con gestión de errores y reporte
         .scrollIntoView()
         .clear({ force: true });
     }
-    
+
     if (descripcion) {
-      cy.get('trix-editor#data\\.description, trix-editor[name="data.description"], textarea[name="data.description"]', { timeout: 10000 })
+      cy.get('textarea#data\\.description, textarea[name="data.description"], trix-editor#data\\.description, trix-editor[name="data.description"]', { timeout: 10000 })
         .scrollIntoView()
-        .click({ force: true })
+        .clear({ force: true })
         .type(descripcion, { force: true });
     }
 
@@ -474,17 +717,12 @@ describe('DEPARTAMENTOS - Validación completa con gestión de errores y reporte
 
   function ejecutarEditarIndividual(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-    
-    let nombre = casoExcel.dato_1 || '';
+
+    const empresa = casoExcel.dato_1 || '';
+    const nombre = casoExcel.dato_2 || '';
     const numero = parseInt(String(casoExcel.caso).replace('TC', ''), 10);
 
-    // Si el nombre contiene "prueba1+", usar el contador
-    if (nombre.includes('prueba1+')) {
-      nombre = nombre.replace('prueba1+', `prueba${contadorPrueba}`);
-      contadorPrueba++;
-    }
-
-    cy.log(`Editar departamento con nombre="${nombre}"`);
+    cy.log(`Editar departamento con empresa="${empresa}", nombre="${nombre}"`);
 
     cy.get('.fi-ta-table, table').scrollTo('right', { ensureScrollable: false });
     cy.wait(500);
@@ -493,6 +731,29 @@ describe('DEPARTAMENTOS - Validación completa con gestión de errores y reporte
     cy.url().should('include', '/departamentos/');
 
     // Rellenar campos con scrollIntoView y force: true
+    if (empresa) {
+      // El select está oculto por Choices.js, interactuar con el componente visible
+      // Buscar directamente el componente Choices.js visible y hacer click
+      cy.get('.choices[data-type="select-one"]', { timeout: 10000 })
+        .first()
+        .should('be.visible')
+        .scrollIntoView()
+        .click({ force: true });
+
+      // Esperar a que cargue el dropdown y aparezcan las opciones
+      cy.wait(3000);
+
+      // Buscar y hacer click en la opción que contiene el texto de la empresa
+      cy.get('.choices__list--dropdown .choices__item, .choices__list .choices__item', { timeout: 15000 })
+        .contains(empresa, { matchCase: false })
+        .should('be.visible')
+        .scrollIntoView()
+        .click({ force: true });
+
+      // Esperar a que se seleccione
+      cy.wait(1000);
+    }
+
     if (nombre) {
       cy.get('input[name="data.name"], input#data\\.name', { timeout: 10000 })
         .scrollIntoView()
