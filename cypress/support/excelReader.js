@@ -33,15 +33,16 @@ Cypress.Commands.add('leerDatosGoogleSheets', (pantalla) => {
   
   // Mapeo de gid por hoja/pantalla (según pestañas del Excel)
   const gidMap = {
-    'datos': '0',              // Hoja Datos (primera hoja)
-    'login': '1362476451',     // Hoja LOGIN
-    'empresas': '1194727364',  // Hoja EMPRESAS
-    'departamentos': '403068141' // Hoja DEPARTAMENTOS (según la URL de la imagen)
+    'datos': '0',                // Hoja Datos (primera hoja)
+    'login': '1362476451',       // Hoja LOGIN
+    'empresas': '1194727364',    // Hoja EMPRESAS
+    'departamentos': '403068141',// Hoja DEPARTAMENTOS
+    'jornadas diarias': '707566490' // Hoja JORNADAS DIARIAS
   };
   
   const pantallaNormalizada = (pantalla || 'datos').toLowerCase();
   const gid = gidMap[pantallaNormalizada] || '0';
-  const range = 'A:M';
+  const range = 'A:AK';
   const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${gid}&range=${encodeURIComponent(range)}`;
 
   cy.log(`🔍 Leyendo hoja ${pantalla} (gid=${gid}) desde: ${csvUrl}`);
@@ -50,8 +51,8 @@ Cypress.Commands.add('leerDatosGoogleSheets', (pantalla) => {
     if (response.status === 200 && response.body) {
       let filasExcel = parseCsvRespectingQuotes(response.body);
 
-      // Normalizar A..M (13 columnas)
-      const COLS = 13;
+      // Normalizar número de columnas (hasta AK => 37 columnas)
+      const COLS = 37;
       filasExcel = filasExcel.map(f => {
         const row = Array.from(f);
         while (row.length < COLS) row.push('');
@@ -90,23 +91,23 @@ Cypress.Commands.add('obtenerDatosExcel', (pantalla) => {
       const pantallaFila = (fila[0] || '').toLowerCase();
       if (pantallaFila === pantallaSafe || pantallaFila === 'login') {
         const dato = {
-          // A..M según tu captura:
-          pantalla         : safe(fila[0]),  // A - Pantalla
-          funcionalidad    : safe(fila[1]),  // B - Funcionalidad
-          caso             : safe(fila[2]),  // C - N°Caso (TCxxx)
-          nombre           : safe(fila[3]),  // D - Nombre
-          prioridad        : safe(fila[4]),  // E - Prioridad
-          funcion          : safe(fila[5]),  // F - Función (clave para mapping)
-          etiqueta_1       : safe(fila[6]),  // G
-          valor_etiqueta_1 : safe(fila[7]),  // H
-          dato_1           : safe(fila[8]),  // I - Email
-          etiqueta_2       : safe(fila[9]),  // J
-          valor_etiqueta_2 : safe(fila[10]), // K
-          dato_2           : safe(fila[11]), // L - Password
-          dato_3           : safe(fila[12])  // M - extra
+          pantalla      : safe(fila[0]),
+          funcionalidad : safe(fila[1]),
+          caso          : safe(fila[2]),
+          nombre        : safe(fila[3]),
+          prioridad     : safe(fila[4]),
+          funcion       : safe(fila[5])
         };
 
-        cy.log(`✅ ${dato.caso} - ${dato.nombre} | Función=${dato.funcion} | Email="${dato.dato_1}" | Password="${dato.dato_2}"`);
+        // Procesar bloques etiqueta/valor/dato (hasta 11 bloques => columnas G..AK)
+        for (let idx = 1; idx <= 11; idx++) {
+          const base = 6 + (idx - 1) * 3;
+          dato[`etiqueta_${idx}`]        = safe(fila[base]);
+          dato[`valor_etiqueta_${idx}`]  = safe(fila[base + 1]);
+          dato[`dato_${idx}`]            = safe(fila[base + 2]);
+        }
+
+        cy.log(`✅ ${dato.caso} - ${dato.nombre} | Función=${dato.funcion} | dato_1="${dato.dato_1}" | dato_2="${dato.dato_2}"`);
         datos.push(dato);
       }
     }
