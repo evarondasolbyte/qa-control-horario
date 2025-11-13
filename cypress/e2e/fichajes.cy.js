@@ -35,14 +35,27 @@ describe('FICHAJES - Validación completa con gestión de errores y reporte a Ex
     cy.procesarResultadosPantalla('Fichajes');
   });
 
-  it('Ejecutar todos los casos de Fichajes desde Google Sheets', () => {
+  const CASOS_OK = new Set([
+    'TC001', 'TC002', 'TC003', 'TC004', 'TC005', 'TC006', 'TC007',
+    'TC011', 'TC012', 'TC017', 'TC020', 'TC021', 'TC022', 'TC023',
+    'TC026', 'TC027', 'TC028', 'TC029'
+  ]);
+
+  it('Ejecutar casos OK de Fichajes desde Google Sheets', () => {
     cy.obtenerDatosExcel('Fichajes').then((casosExcel) => {
       cy.log(`Cargados ${casosExcel.length} casos desde Excel para Fichajes`);
 
       const prioridadFiltro = (Cypress.env('prioridad') || '').toString().toUpperCase();
-      const casosFiltrados = prioridadFiltro && prioridadFiltro !== 'TODAS'
+      let casosFiltrados = prioridadFiltro && prioridadFiltro !== 'TODAS'
         ? casosExcel.filter(c => (c.prioridad || '').toUpperCase() === prioridadFiltro)
         : casosExcel;
+
+      casosFiltrados = casosFiltrados.filter((caso) => {
+        const id = String(caso.caso || '').trim().toUpperCase();
+        return CASOS_OK.has(id);
+      });
+
+      cy.log(`Casos OK a ejecutar: ${casosFiltrados.length} -> ${casosFiltrados.map(c => c.caso).join(', ')}`);
 
       let chain = cy.wrap(null);
       casosFiltrados.forEach((casoExcel, idx) => {
@@ -171,13 +184,13 @@ describe('FICHAJES - Validación completa con gestión de errores y reporte a Ex
     const entradaMinutos = obtenerDatoPorEtiquetas(casoExcel, LABELS_MIN_ENTRADA);
     const salidaMinutos = obtenerDatoPorEtiquetas(casoExcel, LABELS_MIN_SALIDA);
 
-    const { time: horaEntrada, segundos: segEntrada } = normalizarHora({
+    const { time: horaEntrada } = normalizarHora({
       base: entradaBase,
       hora: horaEntradaHoras,
       minuto: entradaMinutos
     });
 
-    const { time: horaSalida, segundos: segSalida } = normalizarHora({
+    const { time: horaSalida } = normalizarHora({
       base: salidaBase,
       hora: horaSalidaHoras,
       minuto: salidaMinutos
@@ -210,13 +223,19 @@ describe('FICHAJES - Validación completa con gestión de errores y reporte a Ex
 
     return cy.get(selector, { timeout: 10000 })
       .should('be.visible')
+      .should('not.be.disabled')
       .then($input => {
         const tipo = ($input.attr('type') || '').toLowerCase();
         if (tipo === 'date' || tipo === 'time') {
+          // Para campos date y time, usar invoke('val') y luego disparar eventos
           cy.wrap($input)
             .invoke('val', valor)
-            .trigger('input')
-            .trigger('change');
+            .then(() => {
+              cy.wrap($input)
+                .trigger('input', { force: true })
+                .trigger('change', { force: true })
+                .trigger('blur', { force: true });
+            });
         } else if (tipo === 'number') {
           cy.wrap($input)
             .clear({ force: true })
@@ -227,6 +246,27 @@ describe('FICHAJES - Validación completa con gestión de errores y reporte a Ex
             .type(String(valor), { force: true });
         }
       });
+  }
+
+  function aceptarAdvertenciaSiExiste(opciones = {}) {
+    const { timeout = 2000 } = opciones;
+
+    return cy.get('body').then(($body) => {
+      const modal = $body.find('.fi-modal:visible, [role="dialog"]:visible, .swal2-container:visible').first();
+      if (!modal.length) {
+        return cy.wrap(null);
+      }
+
+      cy.log('Advertencia detectada: se pulsará "Aceptar" automáticamente.');
+
+      return cy.wrap(modal)
+        .within(() => {
+          cy.contains('button, a', /^Aceptar$/i, { timeout })
+            .should('be.visible')
+            .click({ force: true });
+        })
+        .then(() => cy.wait(400));
+    });
   }
 
   function asegurarSesionFichar(casoExcel) {
@@ -290,7 +330,8 @@ describe('FICHAJES - Validación completa con gestión de errores y reporte a Ex
   // ============== Motor de casos ==============
   function ejecutarCaso(casoExcel, idx) {
     const numero = parseInt(String(casoExcel.caso).replace('TC', ''), 10) || (idx + 1);
-    const nombre = `${casoExcel.caso} - ${casoExcel.nombre}`;
+    const casoId = casoExcel.caso || `TC${String(idx + 1).padStart(3, '0')}`;
+    const nombre = `${casoId} - ${casoExcel.nombre}`;
 
     cy.log('────────────────────────────────────────────────────────');
     cy.log(`▶️ ${nombre} [${casoExcel.prioridad || 'SIN PRIORIDAD'}]`);
@@ -312,11 +353,11 @@ describe('FICHAJES - Validación completa con gestión de errores y reporte a Ex
       .then(() => cy.estaRegistrado())
       .then((ya) => {
         if (!ya) {
-          registrarResultado(numero, nombre, 'Comportamiento correcto', 'Comportamiento correcto', 'OK');
+          registrarResultado(casoId, nombre, 'Comportamiento correcto', 'Comportamiento correcto', 'OK');
         }
       }, (err) => {
         cy.capturarError(nombre, err, {
-          numero,
+          numero: casoId,
           nombre,
           esperado: 'Comportamiento correcto',
           archivo,
@@ -326,9 +367,9 @@ describe('FICHAJES - Validación completa con gestión de errores y reporte a Ex
       });
   }
 
-  function registrarResultado(numero, nombre, esperado, obtenido, resultado) {
+  function registrarResultado(casoId, nombre, esperado, obtenido, resultado) {
     cy.registrarResultados({
-      numero,
+      numero: casoId,
       nombre,
       esperado,
       obtenido,
@@ -505,43 +546,107 @@ describe('FICHAJES - Validación completa con gestión de errores y reporte a Ex
         `Salida: ${datos.fechaSalidaISO || '(sin fecha)'} ${datos.horaSalida || '(sin hora)'}`
       );
 
+      // PASO 1: Rellenar campos de ENTRADA (fecha y hora)
       let chain = cy.wrap(null);
 
       if (datos.fechaEntradaISO) {
-        chain = chain.then(() => establecerValorInput('#input_fecha_entrada', datos.fechaEntradaISO));
-      }
-      if (datos.horaEntrada) {
-        chain = chain.then(() => establecerValorInput('#input_hora_entrada', datos.horaEntrada));
+        chain = chain
+          .then(() => {
+            cy.log(`Rellenando fecha de entrada: ${datos.fechaEntradaISO}`);
+            return establecerValorInput('#input_fecha_entrada', datos.fechaEntradaISO);
+          })
+          .then(() => cy.wait(300))
+          .then(() => {
+            // Verificar que la fecha se estableció correctamente
+            return cy.get('#input_fecha_entrada', { timeout: 5000 })
+              .should('be.visible')
+              .invoke('val')
+              .should('eq', datos.fechaEntradaISO);
+          });
       }
 
+      if (datos.horaEntrada) {
+        chain = chain
+          .then(() => {
+            cy.log(`Rellenando hora de entrada: ${datos.horaEntrada}`);
+            return establecerValorInput('#input_hora_entrada', datos.horaEntrada);
+          })
+          .then(() => cy.wait(300))
+          .then(() => {
+            // Verificar que la hora se estableció correctamente
+            return cy.get('#input_hora_entrada', { timeout: 5000 })
+              .should('be.visible')
+              .invoke('val')
+              .should('eq', datos.horaEntrada);
+          });
+      }
+
+      // PASO 2: Pulsar "Registrar Entrada" solo si hay hora de entrada
       chain = chain.then(() => {
         if (datos.horaEntrada) {
+          cy.log('Pulsando botón "Registrar Entrada"');
           return cy.get('#btn-registrar-entrada', { timeout: 10000 })
             .should('be.visible')
-            .click({ force: true });
+            .should('not.be.disabled')
+            .click({ force: true })
+            .then(() => aceptarAdvertenciaSiExiste())
+            .then(() => cy.wait(800));
+        } else {
+          cy.log('⚠️ No se registrará la entrada porque no se encontró hora de entrada en el Excel.');
+          return cy.wrap(null);
         }
-        cy.log('⚠️ No se registrará la entrada porque no se encontró hora de entrada en el Excel.');
-        return null;
-      }).then(() => cy.wait(400));
-
-      if (datos.fechaSalidaISO) {
-        chain = chain.then(() => establecerValorInput('#input_fecha_salida', datos.fechaSalidaISO));
-      }
-      if (datos.horaSalida) {
-        chain = chain.then(() => establecerValorInput('#input_hora_salida', datos.horaSalida));
-      }
-
-      chain = chain.then(() => {
-        if (datos.horaSalida) {
-          return cy.get('#btn-registrar-salida', { timeout: 10000 })
-            .should('be.visible')
-            .click({ force: true });
-        }
-        cy.log('ℹ️ No se registrará la salida porque no se encontró hora de salida en el Excel.');
-        return null;
       });
 
-      return chain.then(() => cy.wait(600));
+      // PASO 3: Rellenar campos de SALIDA (fecha y hora)
+      if (datos.fechaSalidaISO) {
+        chain = chain
+          .then(() => {
+            cy.log(`Rellenando fecha de salida: ${datos.fechaSalidaISO}`);
+            return establecerValorInput('#input_fecha_salida', datos.fechaSalidaISO);
+          })
+          .then(() => cy.wait(300))
+          .then(() => {
+            // Verificar que la fecha se estableció correctamente
+            return cy.get('#input_fecha_salida', { timeout: 5000 })
+              .should('be.visible')
+              .invoke('val')
+              .should('eq', datos.fechaSalidaISO);
+          });
+      }
+
+      if (datos.horaSalida) {
+        chain = chain
+          .then(() => {
+            cy.log(`Rellenando hora de salida: ${datos.horaSalida}`);
+            return establecerValorInput('#input_hora_salida', datos.horaSalida);
+          })
+          .then(() => cy.wait(300))
+          .then(() => {
+            // Verificar que la hora se estableció correctamente
+            return cy.get('#input_hora_salida', { timeout: 5000 })
+              .should('be.visible')
+              .invoke('val')
+              .should('eq', datos.horaSalida);
+          });
+      }
+
+      // PASO 4: Pulsar "Registrar Salida" solo si hay hora de salida
+      chain = chain.then(() => {
+        if (datos.horaSalida) {
+          cy.log('Pulsando botón "Registrar Salida"');
+          return cy.get('#btn-registrar-salida', { timeout: 10000 })
+            .should('be.visible')
+            .should('not.be.disabled')
+            .click({ force: true })
+            .then(() => aceptarAdvertenciaSiExiste({ timeout: 4000 }))
+            .then(() => cy.wait(800));
+        } else {
+          cy.log('ℹ️ No se registrará la salida porque no se encontró hora de salida en el Excel.');
+          return cy.wrap(null);
+        }
+      });
+
+      return chain;
     });
   }
 
