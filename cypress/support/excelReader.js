@@ -38,7 +38,8 @@ Cypress.Commands.add('leerDatosGoogleSheets', (pantalla) => {
     'empresas': '1194727364',    // Hoja EMPRESAS
     'departamentos': '403068141',// Hoja DEPARTAMENTOS
     'jornadas diarias': '707566490', // Hoja JORNADAS DIARIAS
-    'fichajes': '1887303307'     // Hoja FICHAJES
+    'fichajes': '1887303307',    // Hoja FICHAJES
+    'grupos': '761865168'        // Hoja GRUPOS
   };
   
   const pantallaNormalizada = (pantalla || 'datos').toLowerCase();
