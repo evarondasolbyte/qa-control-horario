@@ -39,7 +39,8 @@ Cypress.Commands.add('leerDatosGoogleSheets', (pantalla) => {
     'departamentos': '403068141',// Hoja DEPARTAMENTOS
     'jornadas diarias': '707566490', // Hoja JORNADAS DIARIAS
     'fichajes': '1887303307',    // Hoja FICHAJES
-    'grupos': '761865168'        // Hoja GRUPOS
+    'grupos': '761865168',       // Hoja GRUPOS
+    'empleados': '1388297990'    // Hoja EMPLEADOS
   };
   
   const pantallaNormalizada = (pantalla || 'datos').toLowerCase();
@@ -91,7 +92,13 @@ Cypress.Commands.add('obtenerDatosExcel', (pantalla) => {
       if (fila.every(c => c === '')) continue;
 
       const pantallaFila = (fila[0] || '').toLowerCase();
-      if (pantallaFila === pantallaSafe || pantallaFila === 'login') {
+      const normalizadaFila = pantallaFila.replace(/s$/, '');
+      const normalizadaSafe = pantallaSafe.replace(/s$/, '');
+      const coincidePantalla =
+        pantallaFila === pantallaSafe ||
+        normalizadaFila === normalizadaSafe;
+
+      if (coincidePantalla || pantallaFila === 'login') {
         const dato = {
           pantalla      : safe(fila[0]),
           funcionalidad : safe(fila[1]),
