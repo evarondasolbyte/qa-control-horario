@@ -152,7 +152,6 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
       'ordenarColumna': ordenarColumna,
       'filtrarEmpresa': filtrarEmpresa,
       'filtrarDepartamento': filtrarDepartamento,
-      // 'verGrupo': verGrupo
     };
 
     if (!funciones[nombreFuncion]) {
