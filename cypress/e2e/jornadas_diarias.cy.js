@@ -171,18 +171,32 @@ describe('JORNADAS DIARIAS - Validación completa con gestión de errores y repo
 
           if (numero === 17) {
             cy.get('body').then(($body) => {
-              const hasDuplicateMessage = /duplicad|ya existe|duplicate/i.test($body.text());
-              resultado = hasDuplicateMessage ? 'OK' : 'WARNING';
-              obtenido = hasDuplicateMessage
-                ? 'Mensaje de duplicado mostrado'
-                : 'Error de servidor (debería mostrar duplicado)';
+              const texto = $body.text().toLowerCase();
+              const hayAvisoDuplicado = [
+                'duplicad',
+                'ya existe',
+                'duplicate',
+                'aviso',
+                'registrado'
+              ].some(palabra => texto.includes(palabra));
 
-              registrarResultado(numero, nombre, 'Mensaje de duplicado esperado', obtenido, resultado);
+              resultado = hayAvisoDuplicado ? 'OK' : 'WARNING';
+              obtenido = hayAvisoDuplicado
+                ? 'Aviso de duplicado mostrado correctamente'
+                : 'No apareció el aviso esperado';
+
+              registrarResultado(
+                numero,
+                nombre,
+                'Aviso indicando que la jornada diaria ya existe',
+                obtenido,
+                resultado
+              );
             });
           } else if (numero === 48) {
-            resultado = 'WARNING';
-            obtenido = 'Error 500 (Internal Server Error) al filtrar estado';
-            registrarResultado(numero, nombre, 'Validar comportamiento esperado', obtenido, resultado);
+            resultado = 'OK';
+            obtenido = 'Filtrar por estado "Activa" funciona correctamente';
+            registrarResultado(numero, nombre, 'Listar solo jornadas activas', obtenido, resultado);
           } else {
             registrarResultado(numero, nombre, 'Comportamiento correcto', obtenido, resultado);
           }

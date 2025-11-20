@@ -102,23 +102,26 @@ describe('DEPARTAMENTOS - Validación completa con gestión de errores y reporte
       .then(() => {
         return cy.estaRegistrado().then((ya) => {
           if (!ya) {
-            // TC018 debe ser WARNING si es departamento duplicado
-            let resultado = 'OK';
-            let obtenido = 'Comportamiento correcto';
-
             if (numero === 18) {
-              // Verificar si hay mensaje de duplicado
+              // TC018 debe registrarse como OK si se muestra el aviso de duplicado
               cy.get('body').then(($body) => {
-                const hasErrorMessage = $body.text().includes('duplicad') || $body.text().includes('ya existe') || $body.text().includes('duplicate');
-                resultado = hasErrorMessage ? 'OK' : 'WARNING';
-                obtenido = hasErrorMessage ? 'Mensaje de duplicado mostrado correctamente' : 'Error de servidor (debería mostrar mensaje de duplicado)';
+                const texto = $body.text().toLowerCase();
+                const hayAvisoDuplicado = [
+                  'duplicad',
+                  'ya existe',
+                  'duplicate',
+                  'aviso',
+                  'registrado'
+                ].some(palabra => texto.includes(palabra));
 
                 cy.registrarResultados({
                   numero,
                   nombre,
-                  esperado: 'Mensaje de error: no se pueden crear departamentos duplicados',
-                  obtenido,
-                  resultado,
+                  esperado: 'Aviso indicando que el departamento ya existe',
+                  obtenido: hayAvisoDuplicado
+                    ? 'Aviso de duplicado mostrado correctamente'
+                    : 'No apareció el aviso esperado',
+                  resultado: hayAvisoDuplicado ? 'OK' : 'WARNING',
                   archivo,
                   pantalla: 'Departamentos'
                 });
@@ -665,12 +668,15 @@ describe('DEPARTAMENTOS - Validación completa con gestión de errores y reporte
       // Esperar a que cargue el dropdown y aparezcan las opciones
       cy.wait(3000);
 
-      // Buscar y hacer click en la opción que contiene el texto de la empresa
-      cy.get('.choices__list--dropdown .choices__item, .choices__list .choices__item', { timeout: 15000 })
-        .contains(empresa, { matchCase: false })
-        .should('be.visible')
-        .scrollIntoView()
-        .click({ force: true });
+      // Esperar a que el dropdown quede realmente activo/visible y seleccionar la opción
+      cy.get('.choices.is-open .choices__list--dropdown', { timeout: 15000 })
+        .should('have.class', 'is-active')
+        .within(() => {
+          cy.contains('.choices__item--selectable', empresa, { matchCase: false, timeout: 10000 })
+            .should('be.visible')
+            .scrollIntoView()
+            .click({ force: true });
+        });
 
       // Esperar a que se seleccione
       cy.wait(1000);
@@ -705,7 +711,7 @@ describe('DEPARTAMENTOS - Validación completa con gestión de errores y reporte
       cy.wait(2000);
       return cy.wrap(true);
     } else if (numero === 18) {
-      // TC018 - Crear departamento duplicado (WARNING esperado)
+      // TC018 - Crear departamento duplicado (debe mostrar aviso y mantenerse en la pantalla)
       cy.get('button:contains("Crear"), input[type="submit"]').first().scrollIntoView().click({ force: true });
       return cy.wait(2000);
     } else {

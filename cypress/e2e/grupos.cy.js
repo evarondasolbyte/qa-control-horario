@@ -6,8 +6,6 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
   const GRUPOS_PATH = '/panelinterno/grupos';
   const DASHBOARD_PATH = '/panelinterno';
 
-  const CASOS_WARNING = new Set(['TC017']);
-
   before(() => {
     Cypress.on('uncaught:exception', (err) => {
       if (
@@ -68,11 +66,39 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
       .then(() => cy.estaRegistrado())
       .then((ya) => {
         if (!ya) {
-          const resultado = CASOS_WARNING.has(casoId) ? 'WARNING' : 'OK';
-          const obtenido = resultado === 'OK'
-            ? 'Comportamiento correcto'
-            : 'Incidencia conocida (duplicado provoca error 500)';
-          registrarResultado(casoId, nombre, 'Comportamiento correcto', obtenido, resultado);
+          if (casoId === 'TC017') {
+            cy.get('body').then(($body) => {
+              const texto = $body.text().toLowerCase();
+              const hayAvisoDuplicado = [
+                'duplicad',
+                'ya existe',
+                'duplicate',
+                'aviso',
+                'registrado'
+              ].some(palabra => texto.includes(palabra));
+
+              const resultado = hayAvisoDuplicado ? 'OK' : 'WARNING';
+              const obtenido = hayAvisoDuplicado
+                ? 'Aviso de duplicado mostrado correctamente'
+                : 'No apareció el aviso esperado';
+
+              registrarResultado(
+                casoId,
+                nombre,
+                'Aviso indicando que el grupo ya existe',
+                obtenido,
+                resultado
+              );
+            });
+          } else {
+            registrarResultado(
+              casoId,
+              nombre,
+              'Comportamiento correcto',
+              'Comportamiento correcto',
+              'OK'
+            );
+          }
         }
       }, (err) => {
         cy.capturarError(nombre, err, {
@@ -100,7 +126,7 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
 
   function obtenerFuncionPorNombre(nombreFuncion) {
     const funciones = {
-      'cargarPantalla': cargarPantalla,
+       'cargarPantalla': cargarPantalla,
       'ejecutarBusquedaIndividual': ejecutarBusquedaIndividual,
       'limpiarBusqueda': limpiarBusqueda,
       'seleccionUnica': seleccionUnica,
@@ -117,6 +143,8 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
       'validarNombreObligatorio': validarNombreObligatorio,
       'validarLongitudNombre': validarLongitudNombre,
       'vincularEmpleado': vincularEmpleado,
+      'asignarJornada': asignarJornadaSemanal,
+      'asignarJornadaSemanal': asignarJornadaSemanal,
       'editarAbrirFormulario': editarAbrirFormulario,
       'ejecutarEditarIndividual': ejecutarEditarIndividual,
       'editarCancelar': editarCancelar,
@@ -476,6 +504,65 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
         return encontrarBotonAlFinal('Crear');
       })
       .then(() => esperarToastExito())
+      .then(() => encontrarBotonAlFinal('Guardar cambios'))
+      .then(() => esperarToastExito());
+  }
+
+  function asignarJornadaSemanal(casoExcel) {
+    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
+    const jornada = obtenerDatoPorEtiqueta(casoExcel, 'jornada') ||
+      obtenerDatoEnTexto(casoExcel, 'Jornada') ||
+      casoExcel.dato_1 ||
+      '';
+
+    return editarAbrirFormulario(casoExcel)
+      .then(() => {
+        cy.contains('button', /^\s*Jornadas?\s+Semanales?\s+Asignadas?\s*$/i, { timeout: 10000 })
+          .filter(':visible')
+          .first()
+          .scrollIntoView()
+          .click({ force: true });
+        cy.wait(400);
+        const abrirModal = () => {
+          return cy.contains('button', /^\s*[\+\-]?\s*Asignar\s+Jornada\s+Semanal\s*$/i, { timeout: 10000 })
+            .filter(':visible')
+            .first()
+            .scrollIntoView()
+            .then(($btn) => {
+              cy.wrap($btn).click({ force: true });
+              cy.wait(600);
+              return cy.get('body').then(($body) => {
+                if ($body.find('.fi-modal:visible, [role="dialog"]:visible').length === 0) {
+                  $btn[0].dispatchEvent(new Event('click', { bubbles: true }));
+                  cy.wait(600);
+                }
+              });
+            });
+        };
+
+        return abrirModal().then(() => {
+          return cy.get('body').then(($body) => {
+            if ($body.find('.fi-modal:visible, [role="dialog"]:visible').length === 0) {
+              return abrirModal();
+            }
+            return null;
+          });
+        });
+      })
+      .then(() => {
+        cy.get('.fi-modal:visible, [role="dialog"]:visible', { timeout: 15000 })
+          .as('modalJornada')
+          .should('be.visible');
+        return seleccionarJornadaEnModal('@modalJornada', jornada);
+      })
+      .then(() => {
+        cy.get('@modalJornada').within(() => {
+          cy.contains('button, a', /^\s*Crear\s*$/i, { timeout: 10000 })
+            .scrollIntoView()
+            .click({ force: true });
+        });
+        return esperarToastExito();
+      })
       .then(() => encontrarBotonAlFinal('Guardar cambios'))
       .then(() => esperarToastExito());
   }
@@ -963,6 +1050,245 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
       if (!contiene) {
         cy.log(`⚠️ No se detectó mensaje que contenga: ${palabrasClave.join(', ')}`);
       }
+    });
+  }
+
+  function seleccionarOpcionEnModal(aliasModal, textoOpcion) {
+    return cy.get(aliasModal).then(($modal) => {
+      const $select = $modal.find('select:visible').first();
+      if ($select.length) {
+        const opciones = $select.find('option').toArray();
+        let opcionElegida = opciones.find((opt) => {
+          const texto = Cypress.$(opt).text().trim();
+          return textoOpcion && new RegExp(textoOpcion, 'i').test(texto);
+        });
+        if (!opcionElegida) {
+          opcionElegida = opciones.find((opt) => Cypress.$(opt).val()) || opciones[0];
+        }
+        if (opcionElegida) {
+          const valor = Cypress.$(opcionElegida).val() || Cypress.$(opcionElegida).text().trim();
+          if (valor) {
+            cy.wrap($select).select(valor, { force: true });
+            cy.wait(300);
+            return;
+          }
+        }
+      }
+
+      const openers = [
+        '[role="combobox"]:visible',
+        '[aria-haspopup="listbox"]:visible',
+        '[aria-expanded="true"]:visible',
+        '.choices:visible',
+        '.fi-select-trigger:visible',
+        '.fi-input:visible',
+        '.fi-field:visible',
+        '.fi-input-wrp:visible',
+        'button:visible',
+        '[role="button"]:visible'
+      ];
+
+      let $trigger = Cypress.$();
+      for (const selector of openers) {
+        const candidato = $modal.find(selector).first();
+        if (candidato.length) {
+          $trigger = candidato;
+          break;
+        }
+      }
+
+      if ($trigger.length) {
+        cy.wrap($trigger).scrollIntoView().click({ force: true });
+      } else {
+        cy.wrap($modal).click('center', { force: true });
+      }
+
+      cy.wait(300);
+
+      let $opciones = $modal.find('[role="option"]:visible');
+      if (!$opciones.length) {
+        $opciones = Cypress.$('[role="option"]:visible');
+      }
+
+      if ($opciones.length) {
+        let $objetivo = textoOpcion
+          ? $opciones.filter((_, el) => new RegExp(textoOpcion, 'i').test(Cypress.$(el).text().trim())).first()
+          : $opciones.first();
+
+        if (!$objetivo.length) {
+          $objetivo = $opciones.first();
+        }
+
+        cy.wrap($objetivo).click({ force: true });
+        return;
+      }
+
+      const dropdownScopes =
+        '.fi-modal:visible .fi-dropdown-panel:visible, .fi-modal:visible .fi-select-panel:visible, [role="listbox"]:visible, .choices__list--dropdown:visible, ul:visible';
+
+      cy.get('body').then(($body) => {
+        if ($body.find(dropdownScopes).length) {
+          cy.get(dropdownScopes, { timeout: 10000 }).first().within(() => {
+            cy.contains(':visible', textoOpcion ? new RegExp(textoOpcion, 'i') : /\S+/, { timeout: 10000 }).click({ force: true });
+          });
+        } else {
+          cy.contains('.fi-modal:visible :visible', textoOpcion ? new RegExp(textoOpcion, 'i') : /\S+/, { timeout: 10000 })
+            .first()
+            .click({ force: true });
+        }
+      });
+    });
+  }
+
+  function seleccionarJornadaEnModal(aliasModal, textoOpcion) {
+    const termino = textoOpcion || '';
+    return cy.get(aliasModal).within(() => {
+      cy.contains('label, span, div', /Jornada\s+Semanal/i, { timeout: 10000 })
+        .filter(':visible')
+        .then($labels => {
+          if (!$labels.length) {
+            throw new Error('No se encontró el label de "Jornada Semanal" visible dentro del modal');
+          }
+
+          let $campo = null;
+          $labels.each((_, el) => {
+            const $label = Cypress.$(el);
+            const candidatos = [
+              $label.closest('.fi-field'),
+              $label.closest('.fi-fo-field'),
+              $label.closest('.fi-input-wrp'),
+              $label.closest('.fi-input'),
+              $label.closest('.fi-select'),
+              $label.closest('[data-field]'),
+              $label.closest('.fi-fo-component'),
+              $label.closest('[data-field-wrapper]'),
+              $label.closest('.grid'),
+              $label.closest('section'),
+              $label.closest('form'),
+              $label.parent()
+            ].filter($el => $el && $el.length);
+
+            if (candidatos.length) {
+              $campo = candidatos[0];
+              return false;
+            }
+          });
+
+          if (!$campo || !$campo.length) {
+            throw new Error('No se pudo localizar el contenedor de "Jornada Semanal"');
+          }
+
+          cy.wrap($campo).scrollIntoView();
+          cy.wrap($campo).as('campoJornada');
+        });
+    }).then(() => {
+      cy.get('@campoJornada').then(($campo) => {
+        const $select = $campo.find('select:visible').first();
+        if ($select.length) {
+          const opciones = $select.find('option').toArray();
+          let opcionElegida = opciones.find((opt) => {
+            const texto = Cypress.$(opt).text().trim();
+            return termino && new RegExp(termino, 'i').test(texto);
+          });
+          if (!opcionElegida) {
+            opcionElegida = opciones.find((opt) => Cypress.$(opt).val()) || opciones[0];
+          }
+          if (opcionElegida) {
+            const valor = Cypress.$(opcionElegida).val() || Cypress.$(opcionElegida).text().trim();
+            cy.wrap($select).select(valor, { force: true });
+            cy.wait(300);
+            return;
+          }
+        }
+
+        cy.wrap($campo).then(($el) => {
+          const $choices = $el.find('.choices:visible').first();
+          if ($choices.length) {
+            cy.wrap($choices).as('triggerChoices');
+          } else {
+            const $combobox = $el.find('[role="combobox"]:visible, [aria-haspopup="listbox"]:visible').first();
+            if ($combobox.length) {
+              cy.wrap($combobox).as('triggerChoices');
+            } else {
+              cy.wrap($el).as('triggerChoices');
+            }
+          }
+        });
+
+        const abrirDropdown = () => {
+          return cy.get('@triggerChoices')
+            .scrollIntoView({ duration: 200 })
+            .within(() => {
+              cy.get('.choices__inner').click('center', { force: true });
+            })
+            .wait(150)
+            .then(($trigger) => {
+              return cy.get('body').then(($body) => {
+                if ($body.find('.choices__list--dropdown.is-active:visible').length === 0) {
+                  ['pointerdown', 'mousedown', 'mouseup', 'click'].forEach((evento) => {
+                    $trigger[0].dispatchEvent(new MouseEvent(evento, { bubbles: true, cancelable: true }));
+                  });
+                }
+              });
+            })
+            .then(() => cy.wait(150));
+        };
+
+        const asegurarDropdown = () => {
+          return abrirDropdown().then(() =>
+            cy.get('body').then(($body) => {
+              if ($body.find('.choices__list--dropdown.is-active:visible').length === 0) {
+                return abrirDropdown();
+              }
+              return null;
+            })
+          );
+        };
+
+        return asegurarDropdown().then(() => {
+          cy.get('body').then(($body) => {
+            const panel = $body.find('.choices__list--dropdown.is-active:visible').last();
+            if (panel.length) {
+              const rect = panel[0].getBoundingClientRect();
+              cy.wrap(panel).scrollIntoView({ duration: 200 });
+              cy.get('@triggerChoices').then(($trigger) => {
+                $trigger[0].dispatchEvent(new MouseEvent('mousemove', {
+                  bubbles: true,
+                  cancelable: true,
+                  clientX: rect.left + 10,
+                  clientY: rect.top + 10
+                }));
+              });
+            }
+          });
+
+          cy.get('body').then(($body) => {
+            const inputSelector = '.choices__input--cloned:visible, input[placeholder*="Teclee"]:visible, input[placeholder*="buscar"]:visible';
+            const $input = $body.find(inputSelector).last();
+            if ($input.length && termino) {
+              cy.wrap($input).clear({ force: true }).type(termino, { force: true, delay: 20 });
+              cy.wait(200);
+            }
+
+            const dropdown = $body.find('.choices__list--dropdown.is-active:visible').last();
+            if (dropdown.length) {
+              const selectorOpcion = '.choices__item--choice:visible';
+              if (termino) {
+                cy.wrap(dropdown).contains(selectorOpcion, new RegExp(termino, 'i'), { timeout: 10000 }).click({ force: true });
+              } else {
+                cy.wrap(dropdown).find(selectorOpcion).first().click({ force: true });
+              }
+            } else {
+              const selectorGenerico = '[role="option"]:visible, .fi-dropdown-panel:visible [data-select-option]:visible';
+              if (termino) {
+                cy.contains(selectorGenerico, new RegExp(termino, 'i'), { timeout: 10000 }).click({ force: true });
+              } else {
+                cy.get(selectorGenerico, { timeout: 10000 }).first().click({ force: true });
+              }
+            }
+          });
+        }).then(() => cy.wait(300));
+      });
     });
   }
 

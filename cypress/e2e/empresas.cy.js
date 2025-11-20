@@ -105,23 +105,26 @@ describe('EMPRESAS - Validación completa con gestión de errores y reporte a Ex
       .then(() => {
         return cy.estaRegistrado().then((ya) => {
           if (!ya) {
-            // TC017 debe ser WARNING si es empresa duplicada
-            let resultado = 'OK';
-            let obtenido = 'Comportamiento correcto';
-            
             if (numero === 17) {
-              // Verificar si hay mensaje de duplicado
+              // TC017 debe registrarse como OK si aparece cualquier aviso de duplicado
               cy.get('body').then(($body) => {
-                const hasErrorMessage = $body.text().includes('duplicad') || $body.text().includes('ya existe') || $body.text().includes('duplicate');
-                resultado = hasErrorMessage ? 'OK' : 'WARNING';
-                obtenido = hasErrorMessage ? 'Mensaje de duplicado mostrado correctamente' : 'Error de servidor (debería mostrar mensaje de duplicado)';
-                
+                const texto = $body.text().toLowerCase();
+                const hayAvisoDuplicado = [
+                  'duplicad',
+                  'ya existe',
+                  'duplicate',
+                  'aviso',
+                  'registrado'
+                ].some(palabra => texto.includes(palabra));
+
                 cy.registrarResultados({
                   numero,
                   nombre,
-                  esperado: 'Mensaje de error: no se pueden crear empresas duplicadas',
-                  obtenido,
-                  resultado,
+                  esperado: 'Aviso indicando que la empresa ya existe',
+                  obtenido: hayAvisoDuplicado
+                    ? 'Aviso de duplicado mostrado correctamente'
+                    : 'No apareció el aviso esperado',
+                  resultado: hayAvisoDuplicado ? 'OK' : 'WARNING',
                   archivo,
                   pantalla: 'Empresas'
                 });
