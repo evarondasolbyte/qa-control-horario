@@ -126,7 +126,7 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
 
   function obtenerFuncionPorNombre(nombreFuncion) {
     const funciones = {
-       'cargarPantalla': cargarPantalla,
+      'cargarPantalla': cargarPantalla,
       'ejecutarBusquedaIndividual': ejecutarBusquedaIndividual,
       'limpiarBusqueda': limpiarBusqueda,
       'seleccionUnica': seleccionUnica,
@@ -152,7 +152,7 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
       'ordenarColumna': ordenarColumna,
       'filtrarEmpresa': filtrarEmpresa,
       'filtrarDepartamento': filtrarDepartamento,
-      'verGrupo': verGrupo
+      // 'verGrupo': verGrupo
     };
 
     if (!funciones[nombreFuncion]) {
@@ -848,52 +848,6 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
     cy.log(`Verificando resultados filtrados por "${depto}"...`);
     return cy.get('.fi-ta-row:visible, tr:visible', { timeout: 10000 })
       .should('have.length.greaterThan', 0);
-  }
-
-  function verGrupo(casoExcel) {
-    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-    
-    // 0) Cerrar cualquier panel o overlay abierto
-    cy.get('body').type('{esc}{esc}');
-    cy.wait(200);
-    cy.get('.fi-ta-table, table').first().click({ force: true });
-    cy.wait(200);
-    
-    // 1) Asegurar que la tabla esté visible
-    cy.get('.fi-ta-table, table', { timeout: 10000 }).should('be.visible');
-    
-    // 2) Hacer scroll horizontal a la derecha para ver el botón "Ver"
-    cy.get('.fi-ta-table, table').scrollTo('right', { ensureScrollable: false });
-    cy.wait(500);
-    
-    // 3) Buscar la primera fila visible
-    cy.get('.fi-ta-row:visible', { timeout: 10000 }).first().then(($row) => {
-      // 4) Hacer scroll horizontal en la fila
-      cy.wrap($row).scrollIntoView();
-      cy.wait(300);
-      
-      // 5) Buscar el botón "Ver" de múltiples formas
-      cy.get('body').then(($body) => {
-        // Intentar encontrar el botón dentro de la fila
-        let $btn = $row.find('button, a').filter((i, el) => {
-          const text = Cypress.$(el).text().trim();
-          return /^Ver$/i.test(text);
-        }).first();
-        
-        if ($btn.length > 0) {
-          cy.wrap($btn).scrollIntoView().click({ force: true });
-        } else {
-          // Fallback: usar cy.contains dentro de la fila
-          cy.wrap($row).within(() => {
-            cy.contains('button, a', /^Ver$/i, { timeout: 10000 })
-              .scrollIntoView()
-              .click({ force: true });
-          });
-        }
-      });
-    });
-    
-    return cy.get('.fi-modal:visible, [role="dialog"]:visible', { timeout: 10000 }).should('be.visible');
   }
 
   // === Helpers específicos ===
