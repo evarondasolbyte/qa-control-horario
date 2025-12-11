@@ -60,7 +60,7 @@ describe('LOGIN - Validación completa con gestión de errores y reporte a Excel
       // 1) Botón de un form /logout
       const selForm = 'form[action*="/logout"] button[type="submit"]';
       if ($body.find(selForm).length) {
-        cy.log('🔎 Encontrado botón Salir vía form[action*="/logout"]');
+        cy.log('Encontrado botón Salir vía form[action*="/logout"]');
         return cy.get(selForm).scrollIntoView().click({ force: true });
       }
 
@@ -68,12 +68,12 @@ describe('LOGIN - Validación completa con gestión de errores y reporte a Excel
       const textoSalir = /Salir/i;
       const $btnText = $body.find('button, a, [role="button"]').filter((_, el) => textoSalir.test(el.innerText || ''));
       if ($btnText.length) {
-        cy.log('🔎 Encontrado botón Salir por texto visible');
+        cy.log('Encontrado botón Salir por texto visible');
         return cy.wrap($btnText.eq(0)).scrollIntoView().click({ force: true });
       }
 
       // 3) Fallback: en algunos temas el botón está en un header lateral
-      cy.log('⚠️ Botón Salir no visible directo, intento alternativo por contains');
+      cy.log('Botón Salir no visible directo, intento alternativo por contains');
       return cy.contains('button, a, [role="button"]', textoSalir, { timeout: 3000 })
         .scrollIntoView()
         .click({ force: true });
@@ -87,7 +87,7 @@ describe('LOGIN - Validación completa con gestión de errores y reporte a Excel
     const funcion = obtenerFuncionPorNombre(casoExcel.funcion);
 
     cy.log('────────────────────────────────────────────────────────');
-    cy.log(`▶️ ${nombre} [${casoExcel.prioridad || 'SIN PRIORIDAD'}] (función: ${casoExcel.funcion})`);
+    cy.log(`${nombre} [${casoExcel.prioridad || 'SIN PRIORIDAD'}] (función: ${casoExcel.funcion})`);
     if (idx > 0) cy.wait(600);
     cy.resetearFlagsTest();
 
@@ -142,7 +142,7 @@ describe('LOGIN - Validación completa con gestión de errores y reporte a Excel
 
     if (!funciones[nombreFuncion]) {
       return () => {
-        cy.log(`⚠️ Función no encontrada en mapping: "${nombreFuncion}"`);
+        cy.log(`Función no encontrada en mapping: "${nombreFuncion}"`);
         return cy.wrap(null);
       };
     }
@@ -222,7 +222,7 @@ describe('LOGIN - Validación completa con gestión de errores y reporte a Excel
     const { dato_1: email, dato_2: password } = casoExcel;
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre} (con espera de 30s antes del login)`);
 
-    // ⏳ Requisito de la app: esperar 30 segundos antes de introducir credenciales
+    // Requisito de la app: esperar 30 segundos antes de introducir credenciales
     cy.wait(40000);
 
     // Autenticación
