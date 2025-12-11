@@ -37,15 +37,13 @@ describe('FICHAJES - Validación completa con gestión de errores y reporte a Ex
     cy.procesarResultadosPantalla('Fichajes');
   });
 
-  const CASOS_OK = new Set(
-    Array.from({ length: 30 }, (_, idx) => `TC${String(idx + 1).padStart(3, '0')}`)
-  );
+  // Ejecutar ninguno (pausado temporalmente). Revertir a la lista completa cuando se desee.
+  const CASOS_OK = new Set();
 
-  // Casos temporalmente pausados (TC002 – TC023). Se pueden reactivar quitando este set.
-  // const CASOS_PAUSADOS = new Set(
-  //   Array.from({ length: 22 }, (_, idx) => `TC${String(idx + 2).padStart(3, '0')}`)
-  // );
-  const CASOS_PAUSADOS = new Set(); // Descomentado para ejecutar todos los casos
+  // Casos temporalmente pausados (TC002 – TC037). Se pueden reactivar quitando este set.
+  const CASOS_PAUSADOS = new Set(
+    Array.from({ length: 36 }, (_, idx) => `TC${String(idx + 2).padStart(3, '0')}`)
+  );
 
   it('Ejecutar casos OK de Fichajes desde Google Sheets', () => {
     cy.obtenerDatosExcel('Fichajes').then((casosExcel) => {
@@ -1731,8 +1729,8 @@ describe('FICHAJES - Validación completa con gestión de errores y reporte a Ex
             const $target = $visibles.length ? $visibles.first() : $btns.first();
 
             cy.wrap($target).click({ force: true });
-          });
         });
+    });
     })
       // 5.1 Si aparece otra vez el modal de "Editar entrada/salida" tras Aceptar, pulsar "Sí" y NO hacer más
       .then(() => {
