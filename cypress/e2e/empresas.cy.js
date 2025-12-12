@@ -825,7 +825,7 @@ describe('EMPRESAS - Validación completa con gestión de errores y reporte a Ex
           .type(notasInternas, { force: true });
       }
 
-      // ✅ FECHA: escribir directo en input type="date"
+      // FECHA: escribir directo en input type="date"
       if (fechaExpiracion) {
         cy.get('input[name="data.expires_at"], input#data\\.expires_at', { timeout: 10000 })
           .scrollIntoView()
