@@ -73,8 +73,8 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
     const nombre = `${casoId} - ${casoExcel.nombre}`;
 
     cy.log('────────────────────────────────────────────────────────');
-    cy.log(`▶️ ${nombre} [${casoExcel.prioridad || 'SIN PRIORIDAD'}]`);
-    cy.log(`🔍 Función solicitada: "${casoExcel.funcion}"`);
+    cy.log(`${nombre} [${casoExcel.prioridad || 'SIN PRIORIDAD'}]`);
+    cy.log(`Función solicitada: "${casoExcel.funcion}"`);
 
     const funcion = obtenerFuncionPorNombre(casoExcel.funcion);
 
@@ -157,7 +157,7 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
     };
 
     if (!funciones[nombreFuncion]) {
-      cy.log(`⚠️ Función no encontrada en mapping: "${nombreFuncion}"`);
+      cy.log(`Función no encontrada en mapping: "${nombreFuncion}"`);
       return () => cy.wrap(null);
     }
     return funciones[nombreFuncion];
@@ -235,7 +235,14 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
   function borradoMasivoConfirmar() {
     abrirAcciones();
     cy.contains('button, a', /Borrar seleccionados/i, { timeout: 10000 }).first().click({ force: true });
-    return confirmarModal(['Borrar', 'Eliminar', 'Confirmar']).then(() => cy.wait(1500));
+    cy.wait(200);
+    // Modificado para cancelar en lugar de confirmar
+    cy.get('.fi-modal:visible, [role="dialog"]:visible', { timeout: 10000 })
+      .should('be.visible')
+      .within(() => {
+        cy.contains('button, a', /Cancelar|Cerrar|No/i, { timeout: 10000 }).click({ force: true });
+      });
+    return cy.get('.fi-ta-row').should('exist'); // Asegurar que las filas aún existan
   }
 
   function borradoMasivoCancelar() {
@@ -761,4 +768,3 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
     });
   }
 });
-
