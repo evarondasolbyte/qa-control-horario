@@ -26,7 +26,7 @@ Cypress.Commands.add('estaRegistrado', () => {
 // Dejo valores por defecto para no repetirlos en cada llamada.
 Cypress.Commands.add('login', ({
   email = 'superadmin@novatrans.app',
-  password = 'solbyte',
+  password = '[REDACTED]',
   useSession = true,
   rememberMe = false
 } = {}) => {

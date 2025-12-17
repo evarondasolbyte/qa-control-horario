@@ -162,7 +162,7 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
         return cy.get('.fi-ta-table, table').should('be.visible');
       } else {
         cy.log('Sin sesión, realizando login primero...');
-        cy.login({ email: 'superadmin@novatrans.app', password: 'solbyte', useSession: false });
+        cy.login({ email: 'superadmin@novatrans.app', password: '[REDACTED]', useSession: false });
         cy.url({ timeout: 15000 }).should('include', DASHBOARD_PATH);
         cy.wait(1500);
 
@@ -505,22 +505,83 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
         // Hacer scroll al final para que aparezca el botón "Crear empleado y vincular al equipo"
         cy.scrollTo('bottom', { duration: 500 });
         cy.wait(500);
-        return cy.contains('button, a', /Crear empleado y vincular al equipo/i, { timeout: 10000 })
+        
+        // Primero hacer clic en el botón "Crear empleado y vincular al equipo"
+        cy.contains('button, a', /Crear empleado y vincular al equipo/i, { timeout: 10000 })
           .scrollIntoView()
+          .should('be.visible')
           .click({ force: true });
-      })
-      .then(() => {
-        // Esperar a que aparezcan los campos del formulario después de hacer clic en el botón
-        cy.wait(1000);
-
+        
+        // Esperar a que aparezca el formulario o modal
+        cy.wait(2000);
+        
         // Los campos usan mountedTableActionsData.0 en lugar de data
         const selectorNombre = 'input[name="mountedTableActionsData.0.name"], input#mountedTableActionsData\\.0\\.name, input[wire\\:model="mountedTableActionsData.0.name"]';
         const selectorApellidos = 'input[name="mountedTableActionsData.0.surname"], input#mountedTableActionsData\\.0\\.surname, input[wire\\:model="mountedTableActionsData.0.surname"]';
         const selectorEmail = 'input[name="mountedTableActionsData.0.email"], input#mountedTableActionsData\\.0\\.email, input[wire\\:model="mountedTableActionsData.0.email"]';
 
-        cy.get(selectorNombre, { timeout: 10000 }).should('be.visible');
-        cy.get(selectorApellidos, { timeout: 10000 }).should('be.visible');
-        cy.get(selectorEmail, { timeout: 10000 }).should('be.visible');
+        // Intentar encontrar los campos de forma más flexible
+        // Primero verificar si hay un modal o contenedor visible
+        cy.get('body').then(($body) => {
+          // Buscar si hay un modal visible
+          const $modal = $body.find('.fi-modal:visible, [role="dialog"]:visible, .modal:visible');
+          if ($modal.length > 0) {
+            cy.wrap($modal).as('formContainer');
+          } else {
+            // Si no hay modal, buscar en el body directamente
+            cy.get('body').as('formContainer');
+          }
+        });
+
+        // Hacer scroll nuevamente para asegurar que los campos estén visibles
+        cy.scrollTo('bottom', { duration: 300 });
+        cy.wait(1000);
+
+        // Buscar los campos dentro del contenedor o en el body
+        cy.get('@formContainer').then(() => {
+          // Esperar a que los campos aparezcan con múltiples intentos
+          cy.get('body').then(($body) => {
+            // Intentar encontrar los campos con diferentes estrategias
+            let found = false;
+            const selectors = [
+              'input[name="mountedTableActionsData.0.name"]',
+              'input#mountedTableActionsData\\.0\\.name',
+              'input[wire\\:model="mountedTableActionsData.0.name"]',
+              'input[placeholder*="nombre" i]',
+              'input[placeholder*="name" i]'
+            ];
+
+            for (const sel of selectors) {
+              if ($body.find(sel).length > 0) {
+                found = true;
+                break;
+              }
+            }
+
+            if (!found) {
+              // Si no se encuentran, esperar un poco más y hacer scroll
+              cy.wait(2000);
+              cy.scrollTo('bottom', { duration: 300 });
+            }
+          });
+        });
+
+        // Esperar a que los campos aparezcan - usar should('exist') primero y luego 'be.visible'
+        cy.get(selectorNombre, { timeout: 25000 })
+          .should('exist')
+          .should('be.visible');
+        
+        cy.get(selectorApellidos, { timeout: 25000 })
+          .should('exist')
+          .should('be.visible');
+        
+        cy.get(selectorEmail, { timeout: 25000 })
+          .should('exist')
+          .should('be.visible');
+
+        // Hacer scroll al primer campo para asegurar que estén en el viewport
+        cy.get(selectorNombre).scrollIntoView({ duration: 300 });
+        cy.wait(300);
 
         // Ahora rellenar los campos
         escribirCampo(selectorNombre, nombreEmpleado);

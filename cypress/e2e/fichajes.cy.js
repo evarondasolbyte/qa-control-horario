@@ -2,7 +2,7 @@
 // Lee los datos desde Google Sheets, ejecuta cada caso y registra el resultado en Excel.
 describe('FICHAJES - Validación completa con gestión de errores y reporte a Excel', () => {
   const archivo = 'reportes_pruebas_control_horario.xlsx';
-  const FICHAJES_URL_ABS = 'https://juancastilla.portalempleado.dev.novatrans.app/fichar?testing=novatranshorario';
+  const FICHAJES_URL_ABS = 'https://horario.dev.novatrans.app/fichar?testing=novatranshorario';
   const FICHAJES_PATH = '/fichar';
   const LOGIN_PATH = '/login';
 
@@ -1045,7 +1045,7 @@ describe('FICHAJES - Validación completa con gestión de errores y reporte a Ex
     return cy.url().then((currentUrl) => {
       if (currentUrl.includes(LOGIN_PATH)) {
         const usuario = obtenerDatoPorEtiqueta(casoExcel, 'usuario') || 'superadmin@novatrans.app';
-        const clave = obtenerDatoPorEtiqueta(casoExcel, 'clave') || 'solbyte';
+        const clave = obtenerDatoPorEtiqueta(casoExcel, 'clave') || '[REDACTED]';
 
         cy.log(`Iniciando sesión manualmente como ${usuario}`);
 

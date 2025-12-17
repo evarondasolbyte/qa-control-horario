@@ -148,7 +148,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
         return cy.get('.fi-ta-table, table').should('be.visible');
       } else {
         cy.log('🔑 Sin sesión, realizando login primero...');
-        cy.login({ email: 'superadmin@novatrans.app', password: 'solbyte', useSession: false });
+        cy.login({ email: 'superadmin@novatrans.app', password: '[REDACTED]', useSession: false });
         cy.url({ timeout: 15000 }).should('include', DASHBOARD_PATH);
         cy.wait(1500);
         cy.visit(EMPLEADOS_URL_ABS, { failOnStatusCode: false });

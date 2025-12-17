@@ -56,7 +56,7 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
         return cerrarPanel();
       }
 
-      cy.login({ email: 'superadmin@novatrans.app', password: 'solbyte', useSession: false });
+      cy.login({ email: 'superadmin@novatrans.app', password: '[REDACTED]', useSession: false });
       cy.url({ timeout: 15000 }).should('include', DASHBOARD_PATH);
       cy.wait(2000);
 
