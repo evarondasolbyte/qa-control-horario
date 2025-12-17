@@ -62,7 +62,7 @@ describe('DEPARTAMENTOS - Validación completa con gestión de errores y reporte
       } else {
         // No hay sesión, hacer login primero
         cy.log('No hay sesión, haciendo login primero...');
-        cy.login({ email: 'superadmin@novatrans.app', password: 'solbyte', useSession: false });
+        cy.login({ email: 'superadmin@novatrans.app', password: 'novatranshorario@2025', useSession: false });
         cy.url({ timeout: 15000 }).should('include', DASHBOARD_PATH);
         cy.wait(2000);
 
