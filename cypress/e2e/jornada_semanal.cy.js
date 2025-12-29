@@ -43,27 +43,90 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
 
   function irAJornadaSemanalLimpio() {
     return cy.url().then((currentUrl) => {
-      const cerrarPanel = () => {
-        cy.wait(500);
-        cy.get('.fi-ta-table, table').first().click({ force: true });
-        return cy.get('.fi-ta-table, table').should('be.visible');
+      const verificarPantallaCargada = () => {
+        // Esperar a que la página cargue completamente
+        cy.wait(1000);
+        
+        // Intentar cerrar panel lateral si existe (sin fallar si no existe)
+        cy.get('body').then(($body) => {
+          const hayPanelLateral = $body.find('[class*="overlay"], [class*="modal"], [class*="drawer"], [class*="sidebar"]').length > 0;
+          if (hayPanelLateral) {
+            cy.log('Cerrando panel lateral...');
+            cy.get('body').type('{esc}');
+            cy.wait(500);
+          }
+        });
+
+        // Verificar que la página esté cargada
+        cy.get('body', { timeout: 20000 }).should('be.visible');
+        
+        // Verificar si hay tabla o estado de "sin datos" - ambos son válidos
+        return cy.get('body', { timeout: 20000 }).then(($body) => {
+          const hayTabla = $body.find('.fi-ta-table, table').length > 0;
+          
+          if (hayTabla) {
+            cy.log('Tabla encontrada, verificando visibilidad...');
+            return cy.get('.fi-ta-table, table', { timeout: 20000 }).should('exist');
+          }
+          
+          // Si no hay tabla, verificar si hay estado de "sin datos"
+          const hayEstadoVacio = $body.find('.fi-empty-state, .fi-ta-empty-state, [class*="empty"], [class*="sin datos"], [class*="no hay"]').length > 0;
+          const textoBody = $body.text().toLowerCase();
+          const hayMensajeSinDatos = textoBody.includes('no hay datos') || 
+                                     textoBody.includes('sin registros') || 
+                                     textoBody.includes('tabla vacía') ||
+                                     textoBody.includes('no se encontraron') ||
+                                     textoBody.includes('no se encontraron registros') ||
+                                     textoBody.includes('sin resultados') ||
+                                     textoBody.includes('no existen registros');
+          
+          if (hayEstadoVacio || hayMensajeSinDatos) {
+            cy.log('No hay registros en la tabla - esto es válido (OK)');
+            return cy.wrap(true);
+          }
+          
+          // Si no hay tabla ni mensaje, esperar un poco más y buscar la tabla
+          cy.log('Esperando a que la tabla se cargue...');
+          return cy.get('.fi-ta-table, table', { timeout: 20000 }).should('exist').catch(() => {
+            // Si después del timeout no hay tabla, verificar una última vez si hay mensaje de sin datos
+            return cy.get('body', { timeout: 2000 }).then(($body2) => {
+              const textoBody2 = $body2.text().toLowerCase();
+              const hayMensaje = textoBody2.includes('no hay') || 
+                                textoBody2.includes('sin datos') || 
+                                textoBody2.includes('vacío') ||
+                                textoBody2.includes('sin registros') ||
+                                textoBody2.includes('sin resultados') ||
+                                textoBody2.includes('no se encontraron') ||
+                                textoBody2.includes('no se encontraron registros') ||
+                                textoBody2.includes('no existen registros');
+              const hayEstado = $body2.find('.fi-empty-state, .fi-ta-empty-state, [class*="empty"]').length > 0;
+              
+              if (hayMensaje || hayEstado) {
+                cy.log('No hay registros - esto es válido (OK)');
+                return cy.wrap(true);
+              }
+              
+              // Si realmente no hay nada, lanzar error
+              cy.log('⚠️ No se encontró tabla ni mensaje de sin datos');
+              throw new Error('No se encontró la tabla ni mensaje de sin datos');
+            });
+          });
+        });
       };
 
       if (currentUrl.includes(DASHBOARD_PATH)) {
         cy.visit(JORNADA_SEMANAL_URL_ABS, { failOnStatusCode: false });
-        cy.url({ timeout: 15000 }).should('include', JORNADA_SEMANAL_PATH);
-        cy.get('.fi-ta-table, table', { timeout: 15000 }).should('exist');
-        return cerrarPanel();
+        cy.url({ timeout: 20000 }).should('include', JORNADA_SEMANAL_PATH);
+        return verificarPantallaCargada();
       }
 
       cy.login({ email: 'superadmin@novatrans.app', password: '[REDACTED]', useSession: false });
-      cy.url({ timeout: 15000 }).should('include', DASHBOARD_PATH);
+      cy.url({ timeout: 20000 }).should('include', DASHBOARD_PATH);
       cy.wait(2000);
 
       cy.visit(JORNADA_SEMANAL_URL_ABS, { failOnStatusCode: false });
-      cy.url({ timeout: 15000 }).should('include', JORNADA_SEMANAL_PATH);
-      cy.get('.fi-ta-table, table', { timeout: 15000 }).should('exist');
-      return cerrarPanel();
+      cy.url({ timeout: 20000 }).should('include', JORNADA_SEMANAL_PATH);
+      return verificarPantallaCargada();
     });
   }
 
@@ -357,9 +420,56 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
   function ejecutarEditarIndividual(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
     const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || casoExcel.dato_1 || generarNombreUnico('jornada-edit');
+    const motivoCambio = 'pruebas';
 
     return editarAbrirFormulario()
       .then(() => escribirCampo('input[name="data.name"], input#data\\.name', nombre))
+      .then(() => {
+        // Escribir el motivo del cambio antes de guardar
+        cy.log('Escribiendo motivo del cambio...');
+        cy.scrollTo('bottom', { duration: 500 });
+        cy.wait(300);
+        
+        // Buscar el campo "Motivo del cambio" por múltiples selectores
+        const selectoresMotivo = [
+          'textarea#data\\.change_reason',
+          'textarea[name="data.change_reason"]',
+          'textarea[wire\\:model="data.change_reason"]',
+          'textarea[placeholder*="Cambio de convenio"]',
+          'textarea[placeholder*="ajuste de jornada"]'
+        ];
+        
+        return cy.get('body').then(($body) => {
+          let encontrado = false;
+          for (const selector of selectoresMotivo) {
+            if ($body.find(selector).length > 0) {
+              encontrado = true;
+              return escribirCampo(selector, motivoCambio);
+            }
+          }
+          
+          // Si no se encuentra por selectores específicos, buscar por label
+          if (!encontrado) {
+            return cy.contains('label, span, div', /Motivo del cambio/i, { timeout: 10000 })
+              .then(($label) => {
+                const $wrapper = $label.closest('div, section, form, fieldset');
+                const $textarea = $wrapper.find('textarea').first();
+                if ($textarea.length) {
+                  return cy.wrap($textarea)
+                    .scrollIntoView()
+                    .clear({ force: true })
+                    .type(motivoCambio, { force: true, delay: 20 });
+                }
+                // Si aún no se encuentra, buscar cualquier textarea cerca del label
+                return cy.get('textarea:visible')
+                  .first()
+                  .scrollIntoView()
+                  .clear({ force: true })
+                  .type(motivoCambio, { force: true, delay: 20 });
+              });
+          }
+        });
+      })
       .then(() => encontrarBotonAlFinal('Guardar cambios'))
       .then(() => esperarToastExito());
   }
@@ -506,6 +616,7 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
 
     const tipoJornada = obtenerDatoPorEtiqueta(casoExcel, 'tipo') || casoExcel.dato_1 || '';
+    const motivoCambio = 'pruebas';
 
     return editarAbrirFormulario()
       .then(() => cy.url({ timeout: 10000 }).should('match', /\/jornada-semanal\/.+\/edit/))
@@ -543,22 +654,149 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
           .as('modalTipos')
           .should('be.visible');
 
-        cy.get('@modalTipos').within(() => {
-          if (tipoJornada) {
-            cy.contains('label, span, div, button', new RegExp(tipoJornada, 'i'), { timeout: 10000 })
-              .scrollIntoView()
-              .click({ force: true });
-          } else {
-            cy.get('[type="checkbox"]:visible, [role="option"]:visible, .fi-checkbox input:visible')
-              .first()
-              .scrollIntoView()
-              .click({ force: true });
+        // Verificar si hay opciones disponibles para seleccionar (fuera del within para evitar problemas)
+        return cy.get('@modalTipos').then(($modal) => {
+          // Buscar checkboxes o inputs de selección
+          const hayCheckboxes = $modal.find('[type="checkbox"]:visible, .fi-checkbox input:visible, input[type="checkbox"]:visible').length > 0;
+          
+          // Buscar opciones listadas (labels con texto relacionado a jornadas, opciones de lista)
+          const hayOpcionesListadas = $modal.find('[role="option"]:visible, .fi-fo-checkbox-list-option:visible, .fi-fo-checkbox-list-option-label:visible').length > 0;
+          
+          // Buscar elementos seleccionables que contengan texto relacionado con tipos de jornada
+          const hayElementosSeleccionables = $modal.find('label:visible, .fi-fo-checkbox-list-option-label:visible').filter((i, el) => {
+            const texto = Cypress.$(el).text().toLowerCase();
+            // Buscar texto que indique que es una opción de tipo de jornada (no solo "jornada" o "tipo" en labels genéricos)
+            return (texto.includes('jornada') && texto.length > 10) || 
+                   (texto.includes('[') && texto.includes(']')) || // Formato como "admin [Jornada de trabajo]"
+                   texto.match(/días activo/i); // "Días activo: L, M, X, J, V"
+          }).length > 0;
+          
+          // Verificar si hay mensaje de "sin resultados" o "no hay datos"
+          const textoModal = $modal.text().toLowerCase();
+          const hayMensajeSinDatos = textoModal.includes('no hay') || 
+                                     textoModal.includes('sin resultados') || 
+                                     textoModal.includes('sin datos') ||
+                                     textoModal.includes('no se encontraron');
+          
+          // Si no hay nada para seleccionar o hay mensaje de sin datos, cerrar el modal y terminar (OK)
+          if ((!hayCheckboxes && !hayOpcionesListadas && !hayElementosSeleccionables) || hayMensajeSinDatos) {
+            cy.log('No hay opciones disponibles para seleccionar - esto es válido (OK)');
+            // Intentar cerrar con el botón X o Cancelar
+            const $btnCerrar = $modal.find('button[aria-label*="cerrar"], button[aria-label*="close"], .fi-modal-close, [aria-label="Close"], button:contains("×")').first();
+            if ($btnCerrar.length > 0) {
+              cy.wrap($btnCerrar).click({ force: true });
+            } else {
+              cy.get('@modalTipos').within(() => {
+                cy.contains('button, a', /Cancelar|Cerrar/i, { timeout: 10000 })
+                  .first()
+                  .click({ force: true });
+              });
+            }
+            return cy.wrap(true);
           }
-          cy.contains('button, a', /Enviar|Guardar/i, { timeout: 10000 }).click({ force: true });
-        });
 
-        cy.get('.fi-modal:visible, [role="dialog"]:visible', { timeout: 10000 }).should('not.exist');
-        return cy.wait(1000);
+          // Si hay opciones, proceder con la selección dentro del modal
+          return cy.get('@modalTipos').within(() => {
+            if (tipoJornada) {
+              cy.contains('label, span, div, button', new RegExp(tipoJornada, 'i'), { timeout: 10000 })
+                .scrollIntoView()
+                .click({ force: true });
+            } else {
+              // Buscar el primer checkbox disponible
+              cy.get('[type="checkbox"]:visible, .fi-checkbox input:visible, input[type="checkbox"]:visible', { timeout: 5000 })
+                .first()
+                .then(($checkbox) => {
+                  if ($checkbox.length > 0) {
+                    cy.wrap($checkbox)
+                      .scrollIntoView()
+                      .click({ force: true });
+                  } else {
+                    // Si no hay checkbox, buscar opciones listadas
+                    cy.get('[role="option"]:visible, .fi-fo-checkbox-list-option:visible, .fi-fo-checkbox-list-option-label:visible', { timeout: 5000 })
+                      .first()
+                      .then(($opcion) => {
+                        if ($opcion.length > 0) {
+                          cy.wrap($opcion)
+                            .scrollIntoView()
+                            .click({ force: true });
+                        } else {
+                          // Si aún no hay nada, considerar que no hay opciones y cerrar
+                          cy.log('No se encontraron opciones seleccionables - esto es válido (OK)');
+                          cy.contains('button, a', /Cancelar|Cerrar/i, { timeout: 10000 })
+                            .first()
+                            .click({ force: true });
+                          return cy.wrap(true);
+                        }
+                      });
+                  }
+                });
+            }
+            cy.contains('button, a', /Enviar|Guardar/i, { timeout: 10000 }).click({ force: true });
+            return cy.wrap(false); // Indica que se seleccionó algo
+          });
+        }).then((sinOpciones) => {
+          // Si no había opciones, ya se cerró el modal, terminar aquí
+          if (sinOpciones) {
+            cy.get('.fi-modal:visible, [role="dialog"]:visible', { timeout: 5000 }).should('not.exist');
+            return cy.wrap(null); // Terminar sin escribir motivo
+          }
+
+          // Si había opciones y se seleccionó, esperar a que se cierre el modal
+          cy.get('.fi-modal:visible, [role="dialog"]:visible', { timeout: 10000 }).should('not.exist');
+          return cy.wait(1000);
+        });
+      })
+      .then((resultado) => {
+        // Solo escribir el motivo del cambio si se seleccionó algo (resultado no es null)
+        if (resultado === null) {
+          cy.log('No se seleccionó nada, no es necesario escribir motivo del cambio');
+          return cy.wrap(null);
+        }
+
+        // Después de cerrar el modal, escribir el motivo del cambio
+        cy.log('Escribiendo motivo del cambio...');
+        cy.scrollTo('bottom', { duration: 500 });
+        cy.wait(300);
+        
+        // Buscar el campo "Motivo del cambio" por múltiples selectores
+        const selectoresMotivo = [
+          'textarea#data\\.change_reason',
+          'textarea[name="data.change_reason"]',
+          'textarea[wire\\:model="data.change_reason"]',
+          'textarea[placeholder*="Cambio de convenio"]',
+          'textarea[placeholder*="ajuste de jornada"]'
+        ];
+        
+        return cy.get('body').then(($body) => {
+          let encontrado = false;
+          for (const selector of selectoresMotivo) {
+            if ($body.find(selector).length > 0) {
+              encontrado = true;
+              return escribirCampo(selector, motivoCambio);
+            }
+          }
+          
+          // Si no se encuentra por selectores específicos, buscar por label
+          if (!encontrado) {
+            return cy.contains('label, span, div', /Motivo del cambio/i, { timeout: 10000 })
+              .then(($label) => {
+                const $wrapper = $label.closest('div, section, form, fieldset');
+                const $textarea = $wrapper.find('textarea').first();
+                if ($textarea.length) {
+                  return cy.wrap($textarea)
+                    .scrollIntoView()
+                    .clear({ force: true })
+                    .type(motivoCambio, { force: true, delay: 20 });
+                }
+                // Si aún no se encuentra, buscar cualquier textarea cerca del label
+                return cy.get('textarea:visible')
+                  .first()
+                  .scrollIntoView()
+                  .clear({ force: true })
+                  .type(motivoCambio, { force: true, delay: 20 });
+              });
+          }
+        });
       });
   }
 

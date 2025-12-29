@@ -106,6 +106,12 @@ if /I "%CATEGORIA%"=="reportes" (
   set "SUBCAT=estadisticas"
 )
 
+REM ---- PORTAL EMPLEADO SUPERADMIN
+if /I "%CATEGORIA%"=="portalEmpleadoSuperAdmin" (
+  set "CATEGORIA=portalEmpleadoSuperAdmin"
+  set "SUBCAT="
+)
+
 REM ============================================================
 REM Normalizar prioridad y exportar a Cypress
 set "PRIORIDAD_LC=%PRIORIDAD%"
@@ -151,6 +157,10 @@ if /I "%CATEGORIA%"=="reportes" (
   if not defined SUBCAT set "SPEC_PATTERN=cypress/e2e/reportes_*.cy.js"
 )
 
+if /I "%CATEGORIA%"=="portalEmpleadoSuperAdmin" (
+  set "SPEC_PATTERN=cypress/e2e/login.cy.js,cypress/e2e/departamentos.cy.js,cypress/e2e/empleados.cy.js,cypress/e2e/empresas.cy.js,cypress/e2e/grupos.cy.js,cypress/e2e/jornada_semanal.cy.js,cypress/e2e/jornadas_diarias.cy.js"
+)
+
 REM Si NO hay categoria (pero sí prioridad), ejecuta TODO
 if "%CATEGORIA%"=="" (
   set "SPEC_PATTERN=cypress/e2e/**/*.cy.js"
@@ -172,12 +182,14 @@ if not defined SPEC_PATTERN (
   echo   configuracion           - Pruebas de configuracion
   echo   controlHorario          - Pruebas de control horario
   echo   reportes                - Pruebas de reportes
+  echo   portalEmpleadoSuperAdmin - Todas las pruebas del Portal Empleado SuperAdmin
   echo.
   echo Ejemplos:
   echo   run-simple.bat login --prioridad alta
   echo   run-simple.bat autenticacion login --prioridad alta
   echo   run-simple.bat configuracion usuarios --prioridad media
   echo   run-simple.bat controlHorario horarios --prioridad alta
+  echo   run-simple.bat portalEmpleadoSuperAdmin --prioridad alta
   echo   run-simple.bat --prioridad alta
   echo.
   goto :eof

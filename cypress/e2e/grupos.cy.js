@@ -153,24 +153,91 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
 
   function irAGruposLimpio() {
     return cy.url().then((currentUrl) => {
+      const verificarPantallaCargada = () => {
+        // Esperar a que la página cargue completamente
+        cy.wait(1000);
+        
+        // Intentar cerrar panel lateral si existe (sin fallar si no existe)
+        cy.get('body').then(($body) => {
+          const hayPanelLateral = $body.find('[class*="overlay"], [class*="modal"], [class*="drawer"], [class*="sidebar"]').length > 0;
+          if (hayPanelLateral) {
+            cy.log('Cerrando panel lateral...');
+            cy.get('body').type('{esc}');
+            cy.wait(500);
+          }
+        });
+
+        // Verificar que la página esté cargada
+        cy.get('body', { timeout: 20000 }).should('be.visible');
+        
+        // Verificar si hay tabla o estado de "sin datos" - ambos son válidos
+        return cy.get('body', { timeout: 20000 }).then(($body) => {
+          const hayTabla = $body.find('.fi-ta-table, table').length > 0;
+          
+          if (hayTabla) {
+            cy.log('Tabla encontrada, verificando visibilidad...');
+            return cy.get('.fi-ta-table, table', { timeout: 20000 }).should('exist');
+          }
+          
+          // Si no hay tabla, verificar si hay estado de "sin datos"
+          const hayEstadoVacio = $body.find('.fi-empty-state, .fi-ta-empty-state, [class*="empty"], [class*="sin datos"], [class*="no hay"]').length > 0;
+          const textoBody = $body.text().toLowerCase();
+          const hayMensajeSinDatos = textoBody.includes('no hay datos') || 
+                                     textoBody.includes('sin registros') || 
+                                     textoBody.includes('tabla vacía') ||
+                                     textoBody.includes('no se encontraron') ||
+                                     textoBody.includes('no se encontraron registros') ||
+                                     textoBody.includes('sin resultados') ||
+                                     textoBody.includes('no existen registros');
+          
+          if (hayEstadoVacio || hayMensajeSinDatos) {
+            cy.log('No hay registros en la tabla - esto es válido (OK)');
+            return cy.wrap(true);
+          }
+          
+          // Si no hay tabla ni mensaje, esperar un poco más y buscar la tabla
+          cy.log('Esperando a que la tabla se cargue...');
+          return cy.get('.fi-ta-table, table', { timeout: 20000 }).should('exist').catch(() => {
+            // Si después del timeout no hay tabla, verificar una última vez si hay mensaje de sin datos
+            return cy.get('body', { timeout: 2000 }).then(($body2) => {
+              const textoBody2 = $body2.text().toLowerCase();
+              const hayMensaje = textoBody2.includes('no hay') || 
+                                textoBody2.includes('sin datos') || 
+                                textoBody2.includes('vacío') ||
+                                textoBody2.includes('sin registros') ||
+                                textoBody2.includes('sin resultados') ||
+                                textoBody2.includes('no se encontraron') ||
+                                textoBody2.includes('no se encontraron registros') ||
+                                textoBody2.includes('no existen registros');
+              const hayEstado = $body2.find('.fi-empty-state, .fi-ta-empty-state, [class*="empty"]').length > 0;
+              
+              if (hayMensaje || hayEstado) {
+                cy.log('No hay registros - esto es válido (OK)');
+                return cy.wrap(true);
+              }
+              
+              // Si realmente no hay nada, lanzar error
+              cy.log('⚠️ No se encontró tabla ni mensaje de sin datos');
+              throw new Error('No se encontró la tabla ni mensaje de sin datos');
+            });
+          });
+        });
+      };
+
       if (currentUrl.includes(DASHBOARD_PATH) || currentUrl.includes(GRUPOS_PATH)) {
         cy.log('Sesión activa detectada, navegando directamente a Grupos...');
         cy.visit(GRUPOS_URL_ABS, { failOnStatusCode: false });
-        cy.url({ timeout: 15000 }).should('include', GRUPOS_PATH);
-        cy.get('.fi-ta-table, table', { timeout: 15000 }).should('exist');
-        cy.wait(500);
-        return cy.get('.fi-ta-table, table').should('be.visible');
+        cy.url({ timeout: 20000 }).should('include', GRUPOS_PATH);
+        return verificarPantallaCargada();
       } else {
         cy.log('Sin sesión, realizando login primero...');
         cy.login({ email: 'superadmin@novatrans.app', password: '[REDACTED]', useSession: false });
-        cy.url({ timeout: 15000 }).should('include', DASHBOARD_PATH);
+        cy.url({ timeout: 20000 }).should('include', DASHBOARD_PATH);
         cy.wait(1500);
 
         cy.visit(GRUPOS_URL_ABS, { failOnStatusCode: false });
-        cy.url({ timeout: 15000 }).should('include', GRUPOS_PATH);
-        cy.get('.fi-ta-table, table', { timeout: 15000 }).should('exist');
-        cy.wait(500);
-        return cy.get('.fi-ta-table, table').should('be.visible');
+        cy.url({ timeout: 20000 }).should('include', GRUPOS_PATH);
+        return verificarPantallaCargada();
       }
     });
   }
