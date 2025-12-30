@@ -42,7 +42,9 @@ Cypress.Commands.add('leerDatosGoogleSheets', (pantalla) => {
     'grupos': '761865168',       // Hoja GRUPOS
     'empleados': '1388297990',   // Hoja EMPLEADOS
     'roles': '975271079',        // Hoja ROLES
-    'jornada semanal': '536828058' // Hoja JORNADA SEMANAL
+    'jornada semanal': '536828058', // Hoja JORNADA SEMANAL
+    'admin': '1098026656',       // Hoja ADMIN (PruebasUsuarioAdmin)
+    'pruebasusuarioadmin': '1098026656' // Hoja ADMIN (alias)
   };
   
   const pantallaNormalizada = (pantalla || 'datos').toLowerCase();
@@ -98,9 +100,18 @@ Cypress.Commands.add('obtenerDatosExcel', (pantalla) => {
       const normalizadaSafe = pantallaSafe.replace(/s$/, '');
       const coincidePantalla =
         pantallaFila === pantallaSafe ||
-        normalizadaFila === normalizadaSafe;
+        normalizadaFila === normalizadaSafe ||
+        pantallaFila.includes(pantallaSafe) ||
+        pantallaSafe.includes(pantallaFila);
 
-      if (coincidePantalla || pantallaFila === 'login') {
+      // Casos especiales para coincidencia
+      const casosEspeciales = ['login', 'admin', 'pruebasusuarioadmin'];
+      const esCasoEspecial = casosEspeciales.some(esp => 
+        pantallaFila === esp || pantallaSafe === esp || 
+        pantallaFila.includes(esp) || pantallaSafe.includes(esp)
+      );
+
+      if (coincidePantalla || esCasoEspecial) {
         const dato = {
           pantalla      : safe(fila[0]),
           funcionalidad : safe(fila[1]),
