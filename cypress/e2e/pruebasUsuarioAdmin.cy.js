@@ -375,29 +375,29 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
   function obtenerFuncionPorNombre(nombreFuncion) {
     const funciones = {
       // Menú
-      // 'TC001': menuCargarPantalla,
-      // 'TC002': menuVerificarNoEmpresas,
-      // 'TC003': menuVerificarNoRoles,
+      'TC001': menuCargarPantalla,
+      'TC002': menuVerificarNoEmpresas,
+      'TC003': menuVerificarNoRoles,
       // Departamentos
-      // 'TC004': departamentosCargarPantalla,
-      // 'TC005': departamentosCrearMinimo,
-      // 'TC006': departamentosCrearConDescripcion,
-      // 'TC007': departamentosCrearDuplicado,
-      // 'TC008': departamentosValidacionNombreObligatorio,
-      // 'TC009': departamentosEditar,
+      'TC004': departamentosCargarPantalla,
+      'TC005': departamentosCrearMinimo,
+      'TC006': departamentosCrearConDescripcion,
+      'TC007': departamentosCrearDuplicado,
+      'TC008': departamentosValidacionNombreObligatorio,
+      'TC009': departamentosEditar,
       // Grupos
-      // 'TC010': gruposCargarPantalla,
-      // 'TC011': gruposCrearMinimo,
-      // 'TC012': gruposCrearConDescripcion,
-      // 'TC013': gruposCrearDuplicado,
-      // 'TC014': gruposValidacionNombreObligatorio,
-      // 'TC015': gruposCrearConTodo,
-      // 'TC016': gruposEditar,
-      // 'TC017': gruposAsignarJornadaSemanal,
-      // 'TC018': gruposAsignarEmpleado,
+      'TC010': gruposCargarPantalla,
+      'TC011': gruposCrearMinimo,
+      'TC012': gruposCrearConDescripcion,
+      'TC013': gruposCrearDuplicado,
+      'TC014': gruposValidacionNombreObligatorio,
+      'TC015': gruposCrearConTodo,
+      'TC016': gruposEditar,
+      'TC017': gruposAsignarJornadaSemanal,
+      'TC018': gruposAsignarEmpleado,
       // Empleados
-      // 'TC019': empleadosCargarPantalla,
-      // 'TC020': empleadosCrearMinimo,
+      'TC019': empleadosCargarPantalla,
+      'TC020': empleadosCrearMinimo,
       'TC021': empleadosValidacionNombreObligatorio,
       'TC022': empleadosValidacionEmailObligatorio,
       'TC023': empleadosValidacionGrupoObligatorio,
@@ -429,26 +429,26 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
 
     // También buscar por nombre de función
     const funcionesPorNombre = {
-      // 'menuCargarPantalla': menuCargarPantalla,
-      // 'menuVerificarNoEmpresas': menuVerificarNoEmpresas,
-      // 'menuVerificarNoRoles': menuVerificarNoRoles,
-      // 'departamentosCargarPantalla': departamentosCargarPantalla,
-      // 'departamentosCrearMinimo': departamentosCrearMinimo,
-      // 'departamentosCrearConDescripcion': departamentosCrearConDescripcion,
-      // 'departamentosCrearDuplicado': departamentosCrearDuplicado,
-      // 'departamentosValidacionNombreObligatorio': departamentosValidacionNombreObligatorio,
-      // 'departamentosEditar': departamentosEditar,
-      // 'gruposCargarPantalla': gruposCargarPantalla,
-      // 'gruposCrearMinimo': gruposCrearMinimo,
-      // 'gruposCrearConDescripcion': gruposCrearConDescripcion,
-      // 'gruposCrearDuplicado': gruposCrearDuplicado,
-      // 'gruposValidacionNombreObligatorio': gruposValidacionNombreObligatorio,
-      // 'gruposCrearConTodo': gruposCrearConTodo,
-      // 'gruposEditar': gruposEditar,
-      // 'gruposAsignarJornadaSemanal': gruposAsignarJornadaSemanal,
-      // 'gruposAsignarEmpleado': gruposAsignarEmpleado,
-      // 'empleadosCargarPantalla': empleadosCargarPantalla,
-      // 'empleadosCrearMinimo': empleadosCrearMinimo,
+      'menuCargarPantalla': menuCargarPantalla,
+      'menuVerificarNoEmpresas': menuVerificarNoEmpresas,
+      'menuVerificarNoRoles': menuVerificarNoRoles,
+      'departamentosCargarPantalla': departamentosCargarPantalla,
+      'departamentosCrearMinimo': departamentosCrearMinimo,
+      'departamentosCrearConDescripcion': departamentosCrearConDescripcion,
+      'departamentosCrearDuplicado': departamentosCrearDuplicado,
+      'departamentosValidacionNombreObligatorio': departamentosValidacionNombreObligatorio,
+      'departamentosEditar': departamentosEditar,
+      'gruposCargarPantalla': gruposCargarPantalla,
+      'gruposCrearMinimo': gruposCrearMinimo,
+      'gruposCrearConDescripcion': gruposCrearConDescripcion,
+      'gruposCrearDuplicado': gruposCrearDuplicado,
+      'gruposValidacionNombreObligatorio': gruposValidacionNombreObligatorio,
+      'gruposCrearConTodo': gruposCrearConTodo,
+      'gruposEditar': gruposEditar,
+      'gruposAsignarJornadaSemanal': gruposAsignarJornadaSemanal,
+      'gruposAsignarEmpleado': gruposAsignarEmpleado,
+      'empleadosCargarPantalla': empleadosCargarPantalla,
+      'empleadosCrearMinimo': empleadosCrearMinimo,
       'empleadosValidacionNombreObligatorio': empleadosValidacionNombreObligatorio,
       'empleadosValidacionEmailObligatorio': empleadosValidacionEmailObligatorio,
       'empleadosValidacionGrupoObligatorio': empleadosValidacionGrupoObligatorio,
@@ -1029,9 +1029,19 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .first()
           .scrollIntoView()
           .click({ force: true });
-        cy.wait(1000);
+        cy.wait(2000);
+        
+        // Esperar a que aparezca el formulario/modal y los campos estén disponibles
+        cy.get('input[name="mountedTableActionsData.0.name"], input#mountedTableActionsData\\.0\\.name', { timeout: 15000 })
+          .should('be.visible')
+          .should('exist');
+        cy.wait(500);
+        
+        // Ahora escribir en los campos
         escribirCampo('input[name="mountedTableActionsData.0.name"], input#mountedTableActionsData\\.0\\.name', nombre);
+        cy.wait(300);
         escribirCampo('input[name="mountedTableActionsData.0.surname"], input#mountedTableActionsData\\.0\\.surname', apellidos);
+        cy.wait(300);
         escribirCampo('input[name="mountedTableActionsData.0.email"], input#mountedTableActionsData\\.0\\.email', email);
         cy.wait(500);
         cy.get('button:contains("Crear")', { timeout: 10000 })
@@ -1180,6 +1190,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
   function empleadosValidacionEmailObligatorio(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
     const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || procesarPruebaXXX(casoExcel.dato_1) || `prueba${generarNumeroAleatorio()}`;
+    // Obtener el grupo de choices_inner
     const grupo = obtenerDatoPorEtiqueta(casoExcel, 'choices_inner') || casoExcel.dato_2 || 'Admin Group';
     
     return irAPantallaLimpio('/panelinterno/empleados', 'Empleados')
@@ -1188,8 +1199,38 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .first()
           .click({ force: true });
         cy.wait(1000);
+        // Escribir nombre en el campo de nombre
         escribirCampo('input[name="data.name"], input#data\\.name', nombre);
-        seleccionarOpcionChoices(grupo, 'Grupo');
+        cy.wait(500);
+        // Esperar a que desaparezca "Cargando..." antes de seleccionar
+        cy.contains('Cargando...', { timeout: 5000 }).should('not.exist');
+        cy.wait(500);
+        // Seleccionar Grupo - buscar específicamente el campo "Grupo"
+        cy.contains('label, span, div, h3, h4, h5', /grupo/i, { timeout: 10000 })
+          .closest('.fi-field, .fi-fo-field-wrp, .fi-fo-field, section, .grid, form')
+          .first()
+          .within(() => {
+            cy.get('.choices, [role="combobox"], [aria-haspopup="listbox"]', { timeout: 10000 })
+              .first()
+              .scrollIntoView()
+              .click({ force: true });
+          });
+        cy.wait(300);
+        // Esperar a que aparezcan las opciones
+        cy.get('.choices__list--dropdown:visible, [role="listbox"]:visible', { timeout: 10000 })
+          .first()
+          .within(() => {
+            cy.contains('Cargando...', { timeout: 5000 }).should('not.exist');
+            cy.wait(500);
+            // Buscar y seleccionar "Admin Group"
+            cy.log(`Buscando grupo: ${grupo}`);
+            // Buscar la opción que contenga "Admin Group"
+            cy.contains('[role="option"]:visible, .choices__item--choice:visible', /admin\s+group/i, { timeout: 10000 })
+              .should('exist')
+              .should('be.visible')
+              .scrollIntoView()
+              .click({ force: true });
+          });
         cy.wait(500);
         cy.get('button:contains("Crear"), input[type="submit"]', { timeout: 10000 })
           .first()
@@ -1226,9 +1267,13 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .first()
           .click({ force: true });
         cy.wait(1000);
+        // Escribir nombre en el campo de nombre
         escribirCampo('input[name="data.name"], input#data\\.name', nombre);
+        cy.wait(500);
+        // Escribir email en el campo de email
         escribirCampo('input[name="data.email"], input#data\\.email', email);
         cy.wait(500);
+        // NO seleccionar Grupo - esto es para validar que el Grupo es obligatorio
         cy.get('button:contains("Crear"), input[type="submit"]', { timeout: 10000 })
           .first()
           .scrollIntoView()
@@ -1269,14 +1314,51 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .first()
           .click({ force: true });
         cy.wait(1000);
+        // Rellenar todos los campos
         escribirCampo('input[name="data.name"], input#data\\.name', nombre);
         escribirCampo('input[name="data.surname"], input#data\\.surname', apellidos);
         escribirCampo('input[name="data.email"], input#data\\.email', email);
         escribirCampo('input[name="data.phone"], input#data\\.phone', telefono);
-        seleccionarOpcionChoices(grupo, 'Grupo');
-        if (departamento) seleccionarOpcionChoices(departamento, 'Departamento');
-        if (roles) seleccionarOpcionChoices(roles, 'Roles');
         cy.wait(500);
+        // Esperar a que desaparezca "Cargando..." antes de seleccionar
+        cy.contains('Cargando...', { timeout: 5000 }).should('not.exist');
+        cy.wait(500);
+        // Seleccionar Grupo - usar el mismo método robusto que TC020 y TC021
+        cy.contains('label, span, div, h3, h4, h5', /grupo/i, { timeout: 10000 })
+          .closest('.fi-field, .fi-fo-field-wrp, .fi-fo-field, section, .grid, form')
+          .first()
+          .within(() => {
+            cy.get('.choices, [role="combobox"], [aria-haspopup="listbox"]', { timeout: 10000 })
+              .first()
+              .scrollIntoView()
+              .click({ force: true });
+          });
+        cy.wait(300);
+        // Esperar a que aparezcan las opciones
+        cy.get('.choices__list--dropdown:visible, [role="listbox"]:visible', { timeout: 10000 })
+          .first()
+          .within(() => {
+            cy.contains('Cargando...', { timeout: 5000 }).should('not.exist');
+            cy.wait(500);
+            // Buscar y seleccionar "Admin Group"
+            cy.log(`Buscando grupo: ${grupo}`);
+            cy.contains('[role="option"]:visible, .choices__item--choice:visible', /admin\s+group/i, { timeout: 10000 })
+              .should('exist')
+              .should('be.visible')
+              .scrollIntoView()
+              .click({ force: true });
+          });
+        cy.wait(500);
+        // Seleccionar Departamento si existe
+        if (departamento) {
+          seleccionarOpcionChoices(departamento, 'Departamento');
+          cy.wait(500);
+        }
+        // Seleccionar Roles si existe
+        if (roles) {
+          seleccionarOpcionChoices(roles, 'Roles');
+          cy.wait(500);
+        }
         cy.get('button:contains("Crear"), input[type="submit"]', { timeout: 10000 })
           .first()
           .scrollIntoView()
@@ -1416,16 +1498,38 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .click({ force: true });
         cy.wait(1000);
         escribirCampo('input[name="data.name"], input#data\\.name', nombre);
-        // Activar rango de inicio
-        cy.contains('rango de inicio, rango para iniciar', { timeout: 5000 }).click({ force: true }).catch(() => {});
         cy.wait(500);
-        // Buscar campos Desde y Hasta para rango de inicio
-        cy.get('input[placeholder*="Desde"], input[name*="start_from"]', { timeout: 5000 })
+        // Activar rango de inicio - PRIMERO activar el toggle
+        cy.contains('label, span, div, p', /activar.*rango.*inicio|activar.*rango.*para.*iniciar/i, { timeout: 10000 })
           .first()
+          .closest('fieldset, div, section, .fi-field')
+          .within(() => {
+            cy.get('button[role="switch"], [role="switch"], input[type="checkbox"], button.fi-fo-toggle', { timeout: 10000 })
+              .first()
+              .scrollIntoView()
+              .then($toggle => {
+                const isChecked = $toggle.attr('aria-checked') === 'true' || 
+                                 $toggle.hasClass('checked') || 
+                                 $toggle.hasClass('bg-custom-600') ||
+                                 $toggle.hasClass('bg-primary-600');
+                if (!isChecked) {
+                  cy.wrap($toggle).click({ force: true });
+                  cy.wait(800); // Esperar a que se active y se habiliten los campos
+                } else {
+                  cy.wait(300);
+                }
+              });
+          });
+        // Ahora escribir en los campos Desde y Hasta
+        cy.get('input[name="data.entry_start_window"], input#data\\.entry_start_window', { timeout: 10000 })
+          .first()
+          .scrollIntoView()
           .clear({ force: true })
           .type(desde, { force: true });
-        cy.get('input[placeholder*="Hasta"], input[name*="start_to"]', { timeout: 5000 })
+        cy.wait(300);
+        cy.get('input[name="data.entry_end_window"], input#data\\.entry_end_window', { timeout: 10000 })
           .first()
+          .scrollIntoView()
           .clear({ force: true })
           .type(hasta, { force: true });
         cy.wait(500);
@@ -1441,8 +1545,8 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
   function jornadasDiariasCrearConRangoFin(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
     const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || procesarPruebaXXX(casoExcel.dato_1) || `prueba${generarNumeroAleatorio()}`;
-    const desde = obtenerDatoPorEtiqueta(casoExcel, 'data.entry_start_window') || casoExcel.dato_2 || '15:00';
-    const hasta = obtenerDatoPorEtiqueta(casoExcel, 'data.entry_end_window') || casoExcel.dato_3 || '18:00';
+    const desde = obtenerDatoPorEtiqueta(casoExcel, 'data.exit_start_window') || casoExcel.dato_2 || '15:00';
+    const hasta = obtenerDatoPorEtiqueta(casoExcel, 'data.exit_end_window') || casoExcel.dato_3 || '18:00';
     
     return irAPantallaLimpio('/panelinterno/jornadas-diarias', 'Jornadas Diarias')
       .then(() => {
@@ -1451,15 +1555,38 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .click({ force: true });
         cy.wait(1000);
         escribirCampo('input[name="data.name"], input#data\\.name', nombre);
-        // Activar rango de fin
-        cy.contains('rango de fin, rango para finalizar', { timeout: 5000 }).click({ force: true }).catch(() => {});
         cy.wait(500);
-        cy.get('input[placeholder*="Desde"], input[name*="end_from"]', { timeout: 5000 })
+        // Activar rango de fin - PRIMERO activar el toggle
+        cy.contains('label, span, div, p', /activar.*rango.*fin|activar.*rango.*para.*finalizar/i, { timeout: 10000 })
           .first()
+          .closest('fieldset, div, section, .fi-field')
+          .within(() => {
+            cy.get('button[role="switch"], [role="switch"], input[type="checkbox"], button.fi-fo-toggle', { timeout: 10000 })
+              .first()
+              .scrollIntoView()
+              .then($toggle => {
+                const isChecked = $toggle.attr('aria-checked') === 'true' || 
+                                 $toggle.hasClass('checked') || 
+                                 $toggle.hasClass('bg-custom-600') ||
+                                 $toggle.hasClass('bg-primary-600');
+                if (!isChecked) {
+                  cy.wrap($toggle).click({ force: true });
+                  cy.wait(800); // Esperar a que se active y se habiliten los campos
+                } else {
+                  cy.wait(300);
+                }
+              });
+          });
+        // Ahora escribir en los campos Desde y Hasta
+        cy.get('input[name="data.exit_start_window"], input#data\\.exit_start_window', { timeout: 10000 })
+          .first()
+          .scrollIntoView()
           .clear({ force: true })
           .type(desde, { force: true });
-        cy.get('input[placeholder*="Hasta"], input[name*="end_to"]', { timeout: 5000 })
+        cy.wait(300);
+        cy.get('input[name="data.exit_end_window"], input#data\\.exit_end_window', { timeout: 10000 })
           .first()
+          .scrollIntoView()
           .clear({ force: true })
           .type(hasta, { force: true });
         cy.wait(500);
@@ -1485,15 +1612,38 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .click({ force: true });
         cy.wait(1000);
         escribirCampo('input[name="data.name"], input#data\\.name', nombre);
-        // Activar rango de duración
-        cy.contains('duración, tiempo mínimo', { timeout: 5000 }).click({ force: true }).catch(() => {});
         cy.wait(500);
-        cy.get('input[placeholder*="Mínimo"], input[name*="duration_min"]', { timeout: 5000 })
+        // Activar rango de duración - PRIMERO activar el toggle
+        cy.contains('label, span, div, p', /activar.*duración|activar.*tiempo.*mínimo|activar.*tiempo.*máximo/i, { timeout: 10000 })
           .first()
+          .closest('fieldset, div, section, .fi-field')
+          .within(() => {
+            cy.get('button[role="switch"], [role="switch"], input[type="checkbox"], button.fi-fo-toggle', { timeout: 10000 })
+              .first()
+              .scrollIntoView()
+              .then($toggle => {
+                const isChecked = $toggle.attr('aria-checked') === 'true' || 
+                                 $toggle.hasClass('checked') || 
+                                 $toggle.hasClass('bg-custom-600') ||
+                                 $toggle.hasClass('bg-primary-600');
+                if (!isChecked) {
+                  cy.wrap($toggle).click({ force: true });
+                  cy.wait(800); // Esperar a que se active y se habiliten los campos
+                } else {
+                  cy.wait(300);
+                }
+              });
+          });
+        // Ahora escribir en los campos Mínimo y Máximo
+        cy.get('input[name="data.duration_min"], input#data\\.duration_min', { timeout: 10000 })
+          .first()
+          .scrollIntoView()
           .clear({ force: true })
           .type(minimo, { force: true });
-        cy.get('input[placeholder*="Máximo"], input[name*="duration_max"]', { timeout: 5000 })
+        cy.wait(300);
+        cy.get('input[name="data.duration_max"], input#data\\.duration_max', { timeout: 10000 })
           .first()
+          .scrollIntoView()
           .clear({ force: true })
           .type(maximo, { force: true });
         cy.wait(500);
@@ -1519,15 +1669,61 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .click({ force: true });
         cy.wait(1000);
         escribirCampo('input[name="data.name"], input#data\\.name', nombre);
-        // Activar límite mínimo y máximo
-        cy.contains('límite mínimo, límite máximo', { timeout: 5000 }).click({ force: true }).catch(() => {});
         cy.wait(500);
-        cy.get('input[placeholder*="Mínimo"], input[name*="times_min"], input[type="number"]', { timeout: 5000 })
+        // Activar límites - PRIMERO activar ambos toggles por separado
+        // Activar límite mínimo
+        cy.contains('label, span, div, p', /activar.*límite.*mínimo|activar.*cantidad.*mínima/i, { timeout: 10000 })
           .first()
+          .closest('fieldset, div, section, .fi-field')
+          .within(() => {
+            cy.get('button[role="switch"], [role="switch"], input[type="checkbox"], button.fi-fo-toggle', { timeout: 10000 })
+              .first()
+              .scrollIntoView()
+              .then($toggle => {
+                const isChecked = $toggle.attr('aria-checked') === 'true' || 
+                                 $toggle.hasClass('checked') || 
+                                 $toggle.hasClass('bg-custom-600') ||
+                                 $toggle.hasClass('bg-primary-600');
+                if (!isChecked) {
+                  cy.wrap($toggle).click({ force: true });
+                  cy.wait(500);
+                } else {
+                  cy.wait(200);
+                }
+              });
+          });
+        // Activar límite máximo
+        cy.contains('label, span, div, p', /activar.*límite.*máximo|activar.*cantidad.*máxima/i, { timeout: 10000 })
+          .first()
+          .closest('fieldset, div, section, .fi-field')
+          .within(() => {
+            cy.get('button[role="switch"], [role="switch"], input[type="checkbox"], button.fi-fo-toggle', { timeout: 10000 })
+              .first()
+              .scrollIntoView()
+              .then($toggle => {
+                const isChecked = $toggle.attr('aria-checked') === 'true' || 
+                                 $toggle.hasClass('checked') || 
+                                 $toggle.hasClass('bg-custom-600') ||
+                                 $toggle.hasClass('bg-primary-600');
+                if (!isChecked) {
+                  cy.wrap($toggle).click({ force: true });
+                  cy.wait(500);
+                } else {
+                  cy.wait(200);
+                }
+              });
+          });
+        cy.wait(300);
+        // Ahora escribir en los campos Mínimo y Máximo
+        cy.get('input[name="data.daily_min_entries"], input#data\\.daily_min_entries', { timeout: 10000 })
+          .first()
+          .scrollIntoView()
           .clear({ force: true })
           .type(minimo, { force: true });
-        cy.get('input[placeholder*="Máximo"], input[name*="times_max"], input[type="number"]', { timeout: 5000 })
+        cy.wait(300);
+        cy.get('input[name="data.daily_max_entries"], input#data\\.daily_max_entries', { timeout: 10000 })
           .first()
+          .scrollIntoView()
           .clear({ force: true })
           .type(maximo, { force: true });
         cy.wait(500);
@@ -1545,8 +1741,8 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
     const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || procesarPruebaXXX(casoExcel.dato_1) || `prueba${generarNumeroAleatorio()}`;
     const rangoInicioDesde = obtenerDatoPorEtiqueta(casoExcel, 'data.entry_start_window') || casoExcel.dato_2 || '08:00';
     const rangoInicioHasta = obtenerDatoPorEtiqueta(casoExcel, 'data.entry_end_window') || casoExcel.dato_3 || '10:00';
-    const rangoFinDesde = obtenerDatoPorEtiqueta(casoExcel, 'data.entry_start_window') || casoExcel.dato_4 || '15:00';
-    const rangoFinHasta = obtenerDatoPorEtiqueta(casoExcel, 'data.entry_end_window') || casoExcel.dato_5 || '18:00';
+    const rangoFinDesde = obtenerDatoPorEtiqueta(casoExcel, 'data.exit_start_window') || casoExcel.dato_4 || '15:00';
+    const rangoFinHasta = obtenerDatoPorEtiqueta(casoExcel, 'data.exit_end_window') || casoExcel.dato_5 || '18:00';
     const duracionMin = obtenerDatoPorEtiqueta(casoExcel, 'data.duration_min') || casoExcel.dato_6 || '03:00';
     const duracionMax = obtenerDatoPorEtiqueta(casoExcel, 'data.duration_max') || casoExcel.dato_7 || '10:00';
     const limiteMin = obtenerDatoPorEtiqueta(casoExcel, 'data.daily_min_entries') || casoExcel.dato_8 || '1';
@@ -1560,31 +1756,164 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .click({ force: true });
         cy.wait(1000);
         escribirCampo('input[name="data.name"], input#data\\.name', nombre);
-        
-        // Rango de inicio
-        cy.contains('label', /rango de inicio|rango para iniciar/i, { timeout: 5000 }).click({ force: true }).catch(() => {});
-        cy.get('input[placeholder*="Desde"], input[name*="start_from"]', { timeout: 5000 }).first().clear({ force: true }).type(rangoInicioDesde, { force: true });
-        cy.get('input[placeholder*="Hasta"], input[name*="start_to"]', { timeout: 5000 }).first().clear({ force: true }).type(rangoInicioHasta, { force: true });
-
-        // Rango de fin
-        cy.contains('label', /rango de fin|rango para finalizar/i, { timeout: 5000 }).click({ force: true }).catch(() => {});
-        cy.get('input[placeholder*="Desde"], input[name*="end_from"]', { timeout: 5000 }).first().clear({ force: true }).type(rangoFinDesde, { force: true });
-        cy.get('input[placeholder*="Hasta"], input[name*="end_to"]', { timeout: 5000 }).first().clear({ force: true }).type(rangoFinHasta, { force: true });
-
-        // Rango de duración
-        cy.contains('label', /duración|tiempo mínimo/i, { timeout: 5000 }).click({ force: true }).catch(() => {});
-        cy.get('input[placeholder*="Mínimo"], input[name*="duration_min"]', { timeout: 5000 }).first().clear({ force: true }).type(duracionMin, { force: true });
-        cy.get('input[placeholder*="Máximo"], input[name*="duration_max"]', { timeout: 5000 }).first().clear({ force: true }).type(duracionMax, { force: true });
-
-        // Límites de veces
-        cy.contains('label', /límite mínimo|límite máximo/i, { timeout: 5000 }).click({ force: true }).catch(() => {});
-        cy.get('input[placeholder*="Mínimo"], input[name*="times_min"]', { timeout: 5000 }).first().clear({ force: true }).type(limiteMin, { force: true });
-        cy.get('input[placeholder*="Máximo"], input[name*="times_max"]', { timeout: 5000 }).first().clear({ force: true }).type(limiteMax, { force: true });
-
-        // Hora de reinicio de jornada
-        escribirCampo('input[name="data.reset_at"], input#data\\.reset_at', horaReinicio);
-
         cy.wait(500);
+        
+        // Activar y rellenar Rango de inicio - PRIMERO activar el toggle
+        cy.contains('label, span, div, p', /activar.*rango.*inicio|activar.*rango.*para.*iniciar/i, { timeout: 10000 })
+          .first()
+          .closest('fieldset, div, section, .fi-field')
+          .within(() => {
+            cy.get('button[role="switch"], [role="switch"], input[type="checkbox"], button.fi-fo-toggle', { timeout: 10000 })
+              .first()
+              .scrollIntoView()
+              .then($toggle => {
+                // Verificar si está activado por aria-checked o clases
+                const isChecked = $toggle.attr('aria-checked') === 'true' || 
+                                 $toggle.hasClass('checked') || 
+                                 $toggle.hasClass('bg-custom-600') ||
+                                 $toggle.hasClass('bg-primary-600');
+                if (!isChecked) {
+                  cy.wrap($toggle).click({ force: true });
+                  cy.wait(800); // Esperar a que se active y se habiliten los campos
+                } else {
+                  cy.wait(300);
+                }
+              });
+          });
+        // Ahora escribir en los campos del rango de inicio
+        cy.get('input[name="data.entry_start_window"], input#data\\.entry_start_window', { timeout: 10000 })
+          .first().scrollIntoView().clear({ force: true }).type(rangoInicioDesde, { force: true });
+        cy.wait(300);
+        cy.get('input[name="data.entry_end_window"], input#data\\.entry_end_window', { timeout: 10000 })
+          .first().scrollIntoView().clear({ force: true }).type(rangoInicioHasta, { force: true });
+        cy.wait(500);
+
+        // Activar y rellenar Rango de fin - PRIMERO activar el toggle
+        cy.contains('label, span, div, p', /activar.*rango.*fin|activar.*rango.*para.*finalizar/i, { timeout: 10000 })
+          .first()
+          .closest('fieldset, div, section, .fi-field')
+          .within(() => {
+            cy.get('button[role="switch"], [role="switch"], input[type="checkbox"], button.fi-fo-toggle', { timeout: 10000 })
+              .first()
+              .scrollIntoView()
+              .then($toggle => {
+                const isChecked = $toggle.attr('aria-checked') === 'true' || 
+                                 $toggle.hasClass('checked') || 
+                                 $toggle.hasClass('bg-custom-600') ||
+                                 $toggle.hasClass('bg-primary-600');
+                if (!isChecked) {
+                  cy.wrap($toggle).click({ force: true });
+                  cy.wait(800); // Esperar a que se active y se habiliten los campos
+                } else {
+                  cy.wait(300);
+                }
+              });
+          });
+        // Ahora escribir en los campos del rango de fin
+        cy.get('input[name="data.exit_start_window"], input#data\\.exit_start_window', { timeout: 10000 })
+          .first().scrollIntoView().clear({ force: true }).type(rangoFinDesde, { force: true });
+        cy.wait(300);
+        cy.get('input[name="data.exit_end_window"], input#data\\.exit_end_window', { timeout: 10000 })
+          .first().scrollIntoView().clear({ force: true }).type(rangoFinHasta, { force: true });
+        cy.wait(500);
+
+        // Activar y rellenar Rango de duración - PRIMERO activar el toggle
+        cy.contains('label, span, div, p', /activar.*duración|activar.*tiempo.*mínimo|activar.*tiempo.*máximo/i, { timeout: 10000 })
+          .first()
+          .closest('fieldset, div, section, .fi-field')
+          .within(() => {
+            cy.get('button[role="switch"], [role="switch"], input[type="checkbox"], button.fi-fo-toggle', { timeout: 10000 })
+              .first()
+              .scrollIntoView()
+              .then($toggle => {
+                const isChecked = $toggle.attr('aria-checked') === 'true' || 
+                                 $toggle.hasClass('checked') || 
+                                 $toggle.hasClass('bg-custom-600') ||
+                                 $toggle.hasClass('bg-primary-600');
+                if (!isChecked) {
+                  cy.wrap($toggle).click({ force: true });
+                  cy.wait(800); // Esperar a que se active y se habiliten los campos
+                } else {
+                  cy.wait(300);
+                }
+              });
+          });
+        // Ahora escribir en los campos de duración
+        cy.get('input[name="data.duration_min"], input#data\\.duration_min', { timeout: 10000 })
+          .first().scrollIntoView().clear({ force: true }).type(duracionMin, { force: true });
+        cy.wait(300);
+        cy.get('input[name="data.duration_max"], input#data\\.duration_max', { timeout: 10000 })
+          .first().scrollIntoView().clear({ force: true }).type(duracionMax, { force: true });
+        cy.wait(500);
+
+        // Activar y rellenar Límites de veces - PRIMERO activar ambos toggles por separado
+        // Activar límite mínimo - buscar específicamente el texto exacto
+        cy.get('body').then($body => {
+          // Buscar el label o texto que contenga exactamente "Activar límite mínimo"
+          const $labelMin = $body.find('label, span, div, p').filter((_, el) => {
+            const text = (el.innerText || el.textContent || '').trim().toLowerCase();
+            return text.includes('activar') && text.includes('límite') && text.includes('mínimo');
+          }).first();
+          
+          if ($labelMin.length) {
+            // Buscar el toggle asociado en el mismo contenedor
+            const $container = $labelMin.closest('fieldset, div, section, .fi-field, .fi-fo-field-wrp');
+            const $toggle = $container.find('button[role="switch"], button.fi-fo-toggle, [role="switch"]').first();
+            if ($toggle.length) {
+              cy.wrap($toggle).scrollIntoView().then($t => {
+                const isChecked = $t.attr('aria-checked') === 'true' || 
+                                 $t.hasClass('checked') || 
+                                 $t.hasClass('bg-custom-600') ||
+                                 $t.hasClass('bg-primary-600');
+                if (!isChecked) {
+                  cy.wrap($toggle).click({ force: true });
+                  cy.wait(600);
+                } else {
+                  cy.wait(300);
+                }
+              });
+            }
+          }
+        });
+        
+        // Activar límite máximo - buscar específicamente el texto exacto
+        cy.get('body').then($body => {
+          // Buscar el label o texto que contenga exactamente "Activar límite máximo"
+          const $labelMax = $body.find('label, span, div, p').filter((_, el) => {
+            const text = (el.innerText || el.textContent || '').trim().toLowerCase();
+            return text.includes('activar') && text.includes('límite') && text.includes('máximo');
+          }).first();
+          
+          if ($labelMax.length) {
+            // Buscar el toggle asociado en el mismo contenedor
+            const $container = $labelMax.closest('fieldset, div, section, .fi-field, .fi-fo-field-wrp');
+            const $toggle = $container.find('button[role="switch"], button.fi-fo-toggle, [role="switch"]').first();
+            if ($toggle.length) {
+              cy.wrap($toggle).scrollIntoView().then($t => {
+                const isChecked = $t.attr('aria-checked') === 'true' || 
+                                 $t.hasClass('checked') || 
+                                 $t.hasClass('bg-custom-600') ||
+                                 $t.hasClass('bg-primary-600');
+                if (!isChecked) {
+                  cy.wrap($toggle).click({ force: true });
+                  cy.wait(600);
+                } else {
+                  cy.wait(300);
+                }
+              });
+            }
+          }
+        });
+        cy.wait(400);
+        // Ahora escribir en los campos de límites
+        cy.get('input[name="data.daily_min_entries"], input#data\\.daily_min_entries', { timeout: 10000 })
+          .first().scrollIntoView().clear({ force: true }).type(limiteMin, { force: true });
+        cy.wait(300);
+        cy.get('input[name="data.daily_max_entries"], input#data\\.daily_max_entries', { timeout: 10000 })
+          .first().scrollIntoView().clear({ force: true }).type(limiteMax, { force: true });
+        cy.wait(500);
+
+        // Hacer clic en Crear después de rellenar todos los campos
         cy.get('button:contains("Crear"), input[type="submit"]', { timeout: 10000 })
           .first()
           .scrollIntoView()
@@ -1633,13 +1962,30 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .first()
           .click({ force: true });
         cy.wait(1000);
-        escribirCampo('input[name="data.name"], input#data\\.name', nombre);
-        escribirCampo('input[name="data.hours"], input#data\\.hours, input[type="number"]', horas);
-        escribirCampo('input[name="data.minutes"], input#data\\.minutes, input[type="number"]', minutos);
+        // Escribir nombre
+        cy.get('input[name="data.name"], input#data\\.name', { timeout: 10000 })
+          .first()
+          .scrollIntoView({ ensureScrollable: false })
+          .clear({ force: true })
+          .type(nombre, { force: true });
+        cy.wait(300);
+        // Escribir horas - usar el nombre correcto del campo según jornada_semanal.cy.js
+        cy.get('input[name="data.weekly_hours_hours"], input#data\\.weekly_hours_hours', { timeout: 10000 })
+          .first()
+          .scrollIntoView({ ensureScrollable: false })
+          .clear({ force: true })
+          .type(horas, { force: true });
+        cy.wait(300);
+        // Escribir minutos - usar el nombre correcto del campo según jornada_semanal.cy.js
+        cy.get('input[name="data.weekly_hours_minutes"], input#data\\.weekly_hours_minutes', { timeout: 10000 })
+          .first()
+          .scrollIntoView({ ensureScrollable: false })
+          .clear({ force: true })
+          .type(minutos, { force: true });
         cy.wait(500);
         cy.get('button:contains("Crear"), input[type="submit"]', { timeout: 10000 })
           .first()
-          .scrollIntoView()
+          .scrollIntoView({ ensureScrollable: false })
           .click({ force: true });
         cy.wait(2000);
         return cy.wrap(true);
@@ -1727,8 +2073,8 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .click({ force: true });
         cy.wait(1000);
         escribirCampo('input[name="data.name"], input#data\\.name', nombre);
-        escribirCampo('input[name="data.hours"], input#data\\.hours, input[type="number"]', horas);
-        escribirCampo('input[name="data.minutes"], input#data\\.minutes, input[type="number"]', minutos);
+        escribirCampo('input[name="data.weekly_hours_hours"], input#data\\.weekly_hours_hours', horas);
+        escribirCampo('input[name="data.weekly_hours_minutes"], input#data\\.weekly_hours_minutes', minutos);
         cy.wait(500);
         cy.get('button:contains("Crear"), input[type="submit"]', { timeout: 10000 })
           .first()
@@ -1756,10 +2102,9 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
 
   function jornadaSemanalCrearMinHoras(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-    const empresa = obtenerDatoPorEtiqueta(casoExcel, 'empresa') || casoExcel.dato_1 || 'Admin';
-    const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || procesarPruebaXXX(casoExcel.dato_2) || `prueba${generarNumeroAleatorio()}`;
-    const horas = obtenerDatoPorEtiqueta(casoExcel, 'data.weekly_hours_hours') || casoExcel.dato_3 || '-2';
-    const minutos = obtenerDatoPorEtiqueta(casoExcel, 'data.weekly_hours_minutes') || casoExcel.dato_4 || '0';
+    const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || procesarPruebaXXX(casoExcel.dato_1) || `prueba${generarNumeroAleatorio()}`;
+    const horas = obtenerDatoPorEtiqueta(casoExcel, 'data.weekly_hours_hours') || casoExcel.dato_2 || '-2';
+    const minutos = obtenerDatoPorEtiqueta(casoExcel, 'data.weekly_hours_minutes') || casoExcel.dato_3 || '0';
     
     return irAPantallaLimpio('/panelinterno/jornada-semanal', 'Jornada Semanal')
       .then(() => {
@@ -1767,10 +2112,10 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .first()
           .click({ force: true });
         cy.wait(1000);
-        if (empresa) seleccionarOpcionChoices(empresa, 'Empresa');
+        // No hay campo Empresa en este formulario
         escribirCampo('input[name="data.name"], input#data\\.name', nombre);
-        escribirCampo('input[name="data.hours"], input#data\\.hours, input[type="number"]', horas);
-        escribirCampo('input[name="data.minutes"], input#data\\.minutes, input[type="number"]', minutos);
+        escribirCampo('input[name="data.weekly_hours_hours"], input#data\\.weekly_hours_hours', horas);
+        escribirCampo('input[name="data.weekly_hours_minutes"], input#data\\.weekly_hours_minutes', minutos);
         cy.wait(500);
         cy.get('button:contains("Crear"), input[type="submit"]', { timeout: 10000 })
           .first()
@@ -1819,10 +2164,9 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
 
   function jornadaSemanalCrearMaxMinutos(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-    const empresa = obtenerDatoPorEtiqueta(casoExcel, 'empresa') || casoExcel.dato_1 || 'Admin';
-    const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || procesarPruebaXXX(casoExcel.dato_2) || `prueba${generarNumeroAleatorio()}`;
-    const horas = obtenerDatoPorEtiqueta(casoExcel, 'data.weekly_hours_hours') || casoExcel.dato_3 || '40';
-    const minutos = obtenerDatoPorEtiqueta(casoExcel, 'data.weekly_hours_minutes') || casoExcel.dato_4 || '70';
+    const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || procesarPruebaXXX(casoExcel.dato_1) || `prueba${generarNumeroAleatorio()}`;
+    const horas = obtenerDatoPorEtiqueta(casoExcel, 'data.weekly_hours_hours') || casoExcel.dato_2 || '40';
+    const minutos = obtenerDatoPorEtiqueta(casoExcel, 'data.weekly_hours_minutes') || casoExcel.dato_3 || '70';
     
     return irAPantallaLimpio('/panelinterno/jornada-semanal', 'Jornada Semanal')
       .then(() => {
@@ -1830,10 +2174,10 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .first()
           .click({ force: true });
         cy.wait(1000);
-        if (empresa) seleccionarOpcionChoices(empresa, 'Empresa');
+        // No hay campo Empresa en este formulario
         escribirCampo('input[name="data.name"], input#data\\.name', nombre);
-        escribirCampo('input[name="data.hours"], input#data\\.hours, input[type="number"]', horas);
-        escribirCampo('input[name="data.minutes"], input#data\\.minutes, input[type="number"]', minutos);
+        escribirCampo('input[name="data.weekly_hours_hours"], input#data\\.weekly_hours_hours', horas);
+        escribirCampo('input[name="data.weekly_hours_minutes"], input#data\\.weekly_hours_minutes', minutos);
         cy.wait(500);
         cy.get('button:contains("Crear"), input[type="submit"]', { timeout: 10000 })
           .first()
@@ -1861,10 +2205,9 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
 
   function jornadaSemanalCrearMinMinutos(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-    const empresa = obtenerDatoPorEtiqueta(casoExcel, 'empresa') || casoExcel.dato_1 || 'Admin';
-    const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || procesarPruebaXXX(casoExcel.dato_2) || `prueba${generarNumeroAleatorio()}`;
-    const horas = obtenerDatoPorEtiqueta(casoExcel, 'data.weekly_hours_hours') || casoExcel.dato_3 || '40';
-    const minutos = obtenerDatoPorEtiqueta(casoExcel, 'data.weekly_hours_minutes') || casoExcel.dato_4 || '-2';
+    const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || procesarPruebaXXX(casoExcel.dato_1) || `prueba${generarNumeroAleatorio()}`;
+    const horas = obtenerDatoPorEtiqueta(casoExcel, 'data.weekly_hours_hours') || casoExcel.dato_2 || '40';
+    const minutos = obtenerDatoPorEtiqueta(casoExcel, 'data.weekly_hours_minutes') || casoExcel.dato_3 || '-2';
     
     return irAPantallaLimpio('/panelinterno/jornada-semanal', 'Jornada Semanal')
       .then(() => {
@@ -1872,10 +2215,10 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .first()
           .click({ force: true });
         cy.wait(1000);
-        if (empresa) seleccionarOpcionChoices(empresa, 'Empresa');
+        // No hay campo Empresa en este formulario
         escribirCampo('input[name="data.name"], input#data\\.name', nombre);
-        escribirCampo('input[name="data.hours"], input#data\\.hours, input[type="number"]', horas);
-        escribirCampo('input[name="data.minutes"], input#data\\.minutes, input[type="number"]', minutos);
+        escribirCampo('input[name="data.weekly_hours_hours"], input#data\\.weekly_hours_hours', horas);
+        escribirCampo('input[name="data.weekly_hours_minutes"], input#data\\.weekly_hours_minutes', minutos);
         cy.wait(500);
         cy.get('button:contains("Crear"), input[type="submit"]', { timeout: 10000 })
           .first()
@@ -1903,22 +2246,47 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
 
   function jornadaSemanalAnadirTiposJornada(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
+    const jornadaDiaria = obtenerDatoPorEtiqueta(casoExcel, 'jornada') || casoExcel.dato_1 || '';
+    
     return irAPantallaLimpio('/panelinterno/jornada-semanal', 'Jornada Semanal')
       .then(() => {
-        cy.get('.fi-ta-row:visible', { timeout: 10000 }).first().dblclick({ force: true });
+        // Abrir formulario de edición
+        cy.get('.fi-ta-table, table', { timeout: 10000 }).scrollTo('right', { ensureScrollable: false });
+        cy.wait(300);
+        cy.contains('.fi-ta-row:visible a, .fi-ta-row:visible button', /Editar/i, { timeout: 10000 })
+          .first()
+          .click({ force: true });
+        cy.url({ timeout: 10000 }).should('match', /\/jornada-semanal\/.+\/edit/);
         cy.wait(1000);
-        cy.contains('Añadir Tipos de Jornada', { timeout: 10000 })
+        
+        // Scroll al final para encontrar la sección "Asignar jornadas diarias"
+        cy.scrollTo('bottom', { duration: 500 });
+        cy.wait(300);
+        
+        // Buscar y hacer clic en el botón "Añadir Jornada diaria"
+        cy.contains('button, a', /Añadir Jornada diaria/i, { timeout: 10000 })
+          .filter(':visible')
+          .first()
           .scrollIntoView()
           .click({ force: true });
-        cy.wait(1000);
-        // Seleccionar primera jornada disponible
-        cy.get('[role="option"]:visible, .choices__item:visible', { timeout: 10000 })
-          .first()
-          .click({ force: true });
-        cy.wait(500);
-        cy.get('button:contains("Enviar"), button:contains("Crear")', { timeout: 10000 })
-          .first()
-          .click({ force: true });
+        cy.wait(600);
+        
+        // Esperar a que se abra el modal
+        cy.get('.fi-modal:visible, [role="dialog"]:visible', { timeout: 10000 })
+          .should('be.visible')
+          .within(() => {
+            // Seleccionar el segundo checkbox disponible
+            cy.get('input[type="checkbox"]:visible, .fi-checkbox input:visible', { timeout: 10000 })
+              .eq(1) // Segundo checkbox (índice 1)
+              .scrollIntoView()
+              .click({ force: true });
+            cy.wait(300);
+            // Hacer clic en el botón "Enviar"
+            cy.contains('button, a', /Enviar/i, { timeout: 10000 })
+              .first()
+              .scrollIntoView()
+              .click({ force: true });
+          });
         cy.wait(2000);
         return cy.wrap(true);
       });
