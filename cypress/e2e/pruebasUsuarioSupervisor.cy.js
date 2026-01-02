@@ -8,7 +8,7 @@ describe('PRUEBAS USUARIO SUPERVISOR - Validación completa con gestión de erro
   
   // Credenciales de usuario supervisor (desde variables de entorno)
   const SUPERVISOR_EMAIL = Cypress.env('SUPERVISOR_EMAIL') || 'supervisor@supervisor.app';
-  const SUPERVISOR_PASSWORD = Cypress.env('SUPERVISOR_PASSWORD') || '[REDACTED]';
+  const SUPERVISOR_PASSWORD = Cypress.env('SUPERVISOR_PASSWORD') || 'novatranshorario@2025';
 
   // Ignorar ciertos errores JS de la app que no deben romper la suite
   before(() => {

@@ -1045,7 +1045,7 @@ describe('FICHAJES - Validación completa con gestión de errores y reporte a Ex
     return cy.url().then((currentUrl) => {
       if (currentUrl.includes(LOGIN_PATH)) {
         const usuario = obtenerDatoPorEtiqueta(casoExcel, 'usuario') || Cypress.env('SUPERADMIN_EMAIL') || 'superadmin@novatrans.app';
-        const clave = obtenerDatoPorEtiqueta(casoExcel, 'clave') || Cypress.env('SUPERADMIN_PASSWORD') || '[REDACTED]';
+        const clave = obtenerDatoPorEtiqueta(casoExcel, 'clave') || Cypress.env('SUPERADMIN_PASSWORD') || 'novatranshorario@2025';
 
         cy.log(`Iniciando sesión manualmente como ${usuario}`);
 

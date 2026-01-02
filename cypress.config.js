@@ -25,6 +25,14 @@ module.exports = defineConfig({
 
     // Ignorar errores de JavaScript de la aplicación globalmente
     setupNodeEvents(on, config) {
+      // Pasar variables de entorno del .env a Cypress.env()
+      config.env.SUPERVISOR_EMAIL = process.env.SUPERVISOR_EMAIL || config.env.SUPERVISOR_EMAIL;
+      config.env.SUPERVISOR_PASSWORD = process.env.SUPERVISOR_PASSWORD || config.env.SUPERVISOR_PASSWORD;
+      config.env.ADMIN_EMAIL = process.env.ADMIN_EMAIL || config.env.ADMIN_EMAIL;
+      config.env.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || config.env.ADMIN_PASSWORD;
+      config.env.SUPERADMIN_EMAIL = process.env.SUPERADMIN_EMAIL || config.env.SUPERADMIN_EMAIL;
+      config.env.SUPERADMIN_PASSWORD = process.env.SUPERADMIN_PASSWORD || config.env.SUPERADMIN_PASSWORD;
+      
       on('before:browser:launch', (browser, launchOptions) => {
         if (browser.name === 'chrome') {
           launchOptions.args.push('--disable-web-security');
@@ -61,18 +69,25 @@ module.exports = defineConfig({
           const sink = process.env.RESULT_SINK || 'sheets';
 
           // ============== SINK: GOOGLE SHEETS ==============
-          if (sink === 'sheets') {
-            // 1) Autenticación OAuth2 con Service Account
-            const auth = new GoogleAuth({
-              credentials: {
-                client_email: process.env.GS_CLIENT_EMAIL,
-                private_key: (process.env.GS_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-              },
-              scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-            });
-            const client = await auth.getClient();
-            const { token } = await client.getAccessToken();
-            if (!token) throw new Error('No se pudo obtener access token');
+          // Verificar si hay credenciales de Google Sheets válidas antes de intentar usarlas
+          const hasValidCredentials = process.env.GS_CLIENT_EMAIL && 
+                                     process.env.GS_PRIVATE_KEY &&
+                                     !process.env.GS_CLIENT_EMAIL.includes('tu_service_account') &&
+                                     !process.env.GS_PRIVATE_KEY.includes('tu_private_key');
+          
+          if (sink === 'sheets' && hasValidCredentials) {
+            try {
+              // 1) Autenticación OAuth2 con Service Account
+              const auth = new GoogleAuth({
+                credentials: {
+                  client_email: process.env.GS_CLIENT_EMAIL,
+                  private_key: (process.env.GS_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+                },
+                scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+              });
+              const client = await auth.getClient();
+              const { token } = await client.getAccessToken();
+              if (!token) throw new Error('No se pudo obtener access token');
 
             // Helper: escribe en la siguiente fila REAL (debajo del último registro)
             const appendExactRow = async ({ sheetName, endColLetter, rowValues }) => {
@@ -132,6 +147,16 @@ module.exports = defineConfig({
               await appendExactRow({ sheetName: 'Log', endColLetter: 'H', rowValues: row });
             }
             return 'OK';
+            } catch (error) {
+              console.error('❌ Error al guardar en Google Sheets:', error.message);
+              console.log('⚠️ Fallando a Excel local...');
+              // Continuar al código de Excel local más abajo
+            }
+          }
+          
+          // Si no hay credenciales válidas o falló Google Sheets, usar Excel local
+          if (sink === 'sheets' && !hasValidCredentials) {
+            console.log('⚠️ Credenciales de Google Sheets no configuradas o inválidas. Usando Excel local...');
           }
 
           // ============== SINK: EXCEL LOCAL ==============
@@ -205,17 +230,24 @@ module.exports = defineConfig({
           const sink = process.env.RESULT_SINK || 'sheets';
 
           // ============== SINK: GOOGLE SHEETS ==============
-          if (sink === 'sheets') {
-            const auth = new GoogleAuth({
-              credentials: {
-                client_email: process.env.GS_CLIENT_EMAIL,
-                private_key: (process.env.GS_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-              },
-              scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-            });
-            const client = await auth.getClient();
-            const { token } = await client.getAccessToken();
-            if (!token) throw new Error('No se pudo obtener access token');
+          // Verificar si hay credenciales de Google Sheets válidas antes de intentar usarlas
+          const hasValidCredentials = process.env.GS_CLIENT_EMAIL && 
+                                     process.env.GS_PRIVATE_KEY &&
+                                     !process.env.GS_CLIENT_EMAIL.includes('tu_service_account') &&
+                                     !process.env.GS_PRIVATE_KEY.includes('tu_private_key');
+          
+          if (sink === 'sheets' && hasValidCredentials) {
+            try {
+              const auth = new GoogleAuth({
+                credentials: {
+                  client_email: process.env.GS_CLIENT_EMAIL,
+                  private_key: (process.env.GS_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+                },
+                scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+              });
+              const client = await auth.getClient();
+              const { token } = await client.getAccessToken();
+              if (!token) throw new Error('No se pudo obtener access token');
 
             // Helper común: escribe en la fila exacta debajo del último registro
             const appendExactRow = async ({ sheetName, endColLetter, rowValues, spreadsheetId }) => {
@@ -261,6 +293,16 @@ module.exports = defineConfig({
             const logSpreadsheetId = '1cX-c_CHSpCqNVtY8tWWCyP_h2Q-Nrn6I5Xd4hcKcbHo';
             await appendExactRow({ sheetName: 'Log', endColLetter: 'I', rowValues: row, spreadsheetId: logSpreadsheetId });
             return 'OK';
+            } catch (error) {
+              console.error('❌ Error al guardar en Google Sheets:', error.message);
+              console.log('⚠️ Fallando a Excel local...');
+              // Continuar al código de Excel local más abajo
+            }
+          }
+          
+          // Si no hay credenciales válidas o falló Google Sheets, usar Excel local
+          if (sink === 'sheets' && !hasValidCredentials) {
+            console.log('⚠️ Credenciales de Google Sheets no configuradas o inválidas. Usando Excel local...');
           }
 
           // ============== SINK: EXCEL LOCAL ==============
@@ -296,6 +338,9 @@ module.exports = defineConfig({
         },
 
       });
+      
+      // Devolver config para que las variables de entorno se apliquen
+      return config;
     },
   },
 });

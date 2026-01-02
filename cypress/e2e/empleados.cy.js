@@ -219,7 +219,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
         cy.log('🔑 Sin sesión, realizando login primero...');
         cy.login({ 
           email: Cypress.env('SUPERADMIN_EMAIL') || 'superadmin@novatrans.app', 
-          password: Cypress.env('SUPERADMIN_PASSWORD') || '[REDACTED]', 
+          password: Cypress.env('SUPERADMIN_PASSWORD') || 'novatranshorario@2025', 
           useSession: false 
         });
         cy.url({ timeout: 20000 }).should('include', DASHBOARD_PATH);

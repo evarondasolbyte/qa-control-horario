@@ -8,7 +8,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
   
   // Credenciales de usuario admin (desde variables de entorno)
   const ADMIN_EMAIL = Cypress.env('ADMIN_EMAIL') || 'admin@admin.app';
-  const ADMIN_PASSWORD = Cypress.env('ADMIN_PASSWORD') || '[REDACTED]';
+  const ADMIN_PASSWORD = Cypress.env('ADMIN_PASSWORD') || 'novatranshorario@2025';
 
   // Ignorar ciertos errores JS de la app que no deben romper la suite
   before(() => {
