@@ -6,9 +6,9 @@ describe('PRUEBAS USUARIO SUPERVISOR - Validación completa con gestión de erro
   const DASHBOARD_PATH = '/panelinterno';
   const LOGIN_PATH = '/panelinterno/login';
   
-  // Credenciales de usuario supervisor
-  const SUPERVISOR_EMAIL = 'supervisor@supervisor.app';
-  const SUPERVISOR_PASSWORD = '[REDACTED]';
+  // Credenciales de usuario supervisor (desde variables de entorno)
+  const SUPERVISOR_EMAIL = Cypress.env('SUPERVISOR_EMAIL') || 'supervisor@supervisor.app';
+  const SUPERVISOR_PASSWORD = Cypress.env('SUPERVISOR_PASSWORD') || '[REDACTED]';
 
   // Ignorar ciertos errores JS de la app que no deben romper la suite
   before(() => {

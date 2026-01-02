@@ -25,8 +25,8 @@ Cypress.Commands.add('estaRegistrado', () => {
 // Hago login con sesión cacheada por defecto (useSession = true).
 // Dejo valores por defecto para no repetirlos en cada llamada.
 Cypress.Commands.add('login', ({
-  email = 'superadmin@novatrans.app',
-  password = '[REDACTED]',
+  email = Cypress.env('SUPERADMIN_EMAIL') || 'superadmin@novatrans.app',
+  password = Cypress.env('SUPERADMIN_PASSWORD') || '[REDACTED]',
   useSession = true,
   rememberMe = false
 } = {}) => {

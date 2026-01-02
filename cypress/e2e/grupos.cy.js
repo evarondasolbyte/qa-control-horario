@@ -231,7 +231,11 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
         return verificarPantallaCargada();
       } else {
         cy.log('Sin sesión, realizando login primero...');
-        cy.login({ email: 'superadmin@novatrans.app', password: '[REDACTED]', useSession: false });
+        cy.login({ 
+          email: Cypress.env('SUPERADMIN_EMAIL') || 'superadmin@novatrans.app', 
+          password: Cypress.env('SUPERADMIN_PASSWORD') || '[REDACTED]', 
+          useSession: false 
+        });
         cy.url({ timeout: 20000 }).should('include', DASHBOARD_PATH);
         cy.wait(1500);
 
