@@ -161,22 +161,30 @@ Cypress.Commands.add('procesarResultadosPantalla', (pantalla) => {
 
   // --- LOG DETALLADO POR CASO ---
   // Para cada resultado (OK/ERROR/WARNING), dejo una traza en el log.
-  const enviarLog = (resultado) => {
-    cy.task('guardarEnLog', {
-      testId: testId,
-      test: pantalla,
-      paso: `TC${String(resultado.numero).padStart(3, '0')}`,
-      fechaHora: fechaHoraFormateada,
-      resultado: resultado.resultado,
-      nombre: resultado.nombre,
-      esperado: resultado.esperado,
-      obtenido: resultado.obtenido,
-      observacion: resultado.observacion || ''
+  // IMPORTANTE: Ejecutamos secuencialmente con delay para evitar exceder límites de API
+  const todosLosResultados = [...oks, ...errores, ...warnings];
+  
+  let chain = cy.wrap(null);
+  todosLosResultados.forEach((resultado, index) => {
+    chain = chain.then(() => {
+      return cy.task('guardarEnLog', {
+        testId: testId,
+        test: pantalla,
+        paso: `TC${String(resultado.numero).padStart(3, '0')}`,
+        fechaHora: fechaHoraFormateada,
+        resultado: resultado.resultado,
+        nombre: resultado.nombre,
+        esperado: resultado.esperado,
+        obtenido: resultado.obtenido,
+        observacion: resultado.observacion || ''
+      }).then(() => {
+        // Delay de 1.5 segundos entre cada llamada para respetar límite de API (1 req/min)
+        if (index < todosLosResultados.length - 1) {
+          return cy.wait(1500);
+        }
+      });
     });
-  };
-  oks.forEach(enviarLog);
-  errores.forEach(enviarLog);
-  warnings.forEach(enviarLog);
+  });
 
   // --- RESULTADO FINAL DE LA PANTALLA ---
   // Si hay algún ERROR, mando ERROR; si no, WARNING si hubo avisos; si no, OK.

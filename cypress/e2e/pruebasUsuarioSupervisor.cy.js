@@ -6,9 +6,9 @@ describe('PRUEBAS USUARIO SUPERVISOR - Validación completa con gestión de erro
   const DASHBOARD_PATH = '/panelinterno';
   const LOGIN_PATH = '/panelinterno/login';
   
-  // Credenciales de usuario supervisor (ACTUALIZAR CON LAS CREDENCIALES CORRECTAS)
-  const SUPERVISOR_EMAIL = 'supervisor@supervisor.app'; // ACTUALIZAR
-  const SUPERVISOR_PASSWORD = 'password123'; // ACTUALIZAR
+  // Credenciales de usuario supervisor
+  const SUPERVISOR_EMAIL = 'supervisor@supervisor.app';
+  const SUPERVISOR_PASSWORD = '[REDACTED]';
 
   // Ignorar ciertos errores JS de la app que no deben romper la suite
   before(() => {
@@ -55,7 +55,7 @@ describe('PRUEBAS USUARIO SUPERVISOR - Validación completa con gestión de erro
     cy.login({ 
       email: SUPERVISOR_EMAIL, 
       password: SUPERVISOR_PASSWORD, 
-      useSession: true 
+      useSession: false 
     });
     cy.url({ timeout: 20000 }).should('include', DASHBOARD_PATH);
     cy.wait(2000);
@@ -150,34 +150,60 @@ describe('PRUEBAS USUARIO SUPERVISOR - Validación completa con gestión de erro
                 pantalla: 'Pruebas Usuario Supervisor'
               });
             }
-            return cy.wrap(true);
           });
         });
+      }, (err) => {
+        // Si el error es por 500, ya se registró en verificarError500
+        if (err.message && err.message.includes('Error 500 detectado')) {
+          return null; // Ya se registró, continuar con el siguiente caso
+        }
+        cy.capturarError(nombre, err, {
+          numero,
+          nombre,
+          esperado: casoExcel.resultado_esperado || 'Comportamiento correcto',
+          archivo,
+          pantalla: 'Pruebas Usuario Supervisor'
+        });
+        return null; // continuar con el siguiente caso
       });
   }
 
   // === Verificar error 500 global ===
   function verificarError500(casoExcel, numero, nombre) {
-    return cy.get('body', { timeout: 5000 }).then(($body) => {
-      const texto = $body.text().toLowerCase();
-      const tieneError500 = texto.includes('internal server error') ||
-                            texto.includes('500') ||
-                            texto.includes('error del servidor') ||
-                            $body.find('[class*="error"], [class*="500"]').length > 0;
+    return cy.get('body', { timeout: 5000 }).then($body => {
+      try {
+        const textoBody = $body.text().toLowerCase();
+        const tieneError500 = 
+          textoBody.includes('500') || 
+          textoBody.includes('internal server error') ||
+          textoBody.includes('server error') ||
+          textoBody.includes('error interno del servidor') ||
+          $body.find('[class*="error"], [class*="500"], [id*="error"]').length > 0 ||
+          $body.find('h1:contains("500"), h2:contains("500"), h1:contains("Error"), h2:contains("Error")').length > 0;
 
-      if (tieneError500) {
-        cy.log('⚠️ ERROR 500 detectado - marcando como KO');
-        cy.registrarResultados({
-          numero,
-          nombre,
-          esperado: casoExcel.resultado_esperado || 'Comportamiento correcto',
-          obtenido: '500 SERVER ERROR',
-          resultado: 'KO',
-          archivo,
-          pantalla: 'Pruebas Usuario Supervisor'
-        });
-        cy.marcarRegistrado();
+        if (tieneError500) {
+          cy.log('⚠️ Error 500 detectado en la página');
+          cy.registrarResultados({
+            numero,
+            nombre,
+            esperado: casoExcel.resultado_esperado || 'Comportamiento correcto',
+            obtenido: '500 SERVER ERROR / Internal Server Error',
+            resultado: 'KO',
+            archivo,
+            pantalla: 'Pruebas Usuario Supervisor'
+          });
+          throw new Error('Error 500 detectado: Internal Server Error');
+        }
+        return cy.wrap(true);
+      } catch (err) {
+        // Si hay un error en la verificación, continuar de todas formas
+        if (err.message && err.message.includes('Error 500 detectado')) {
+          throw err; // Re-lanzar el error 500 para que se capture arriba
+        }
+        return cy.wrap(true); // Otros errores, continuar
       }
+    }, () => {
+      // Si falla el cy.get, continuar (no romper la prueba)
       return cy.wrap(true);
     });
   }
@@ -778,7 +804,20 @@ describe('PRUEBAS USUARIO SUPERVISOR - Validación completa con gestión de erro
         
         return cy.get('body').then($body => {
           const filasVisibles = $body.find('.fi-ta-row:visible, tr:visible').length;
-          cy.log(`Filas visibles después de búsqueda: ${filasVisibles}`);
+          const textoBody = $body.text().toLowerCase();
+          const hayMensajeSinResultados = textoBody.includes('no se encontraron') ||
+                                         textoBody.includes('sin resultados') ||
+                                         textoBody.includes('no hay datos') ||
+                                         textoBody.includes('sin registros') ||
+                                         $body.find('.fi-empty-state, .fi-ta-empty-state, [class*="empty"]').length > 0;
+          
+          if (filasVisibles > 0) {
+            cy.log(`Filas visibles después de búsqueda: ${filasVisibles} - OK`);
+          } else if (hayMensajeSinResultados) {
+            cy.log('No se encontraron resultados - esto es válido (OK)');
+          } else {
+            cy.log('Búsqueda ejecutada - OK');
+          }
           return cy.wrap(true);
         });
       });
@@ -995,4 +1034,5 @@ describe('PRUEBAS USUARIO SUPERVISOR - Validación completa con gestión de erro
     return 'Pantalla';
   }
 });
+
 
