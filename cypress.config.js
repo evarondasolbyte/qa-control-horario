@@ -77,17 +77,17 @@ module.exports = defineConfig({
           
           if (sink === 'sheets' && hasValidCredentials) {
             try {
-              // 1) Autenticación OAuth2 con Service Account
-              const auth = new GoogleAuth({
-                credentials: {
-                  client_email: process.env.GS_CLIENT_EMAIL,
-                  private_key: (process.env.GS_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-                },
-                scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-              });
-              const client = await auth.getClient();
-              const { token } = await client.getAccessToken();
-              if (!token) throw new Error('No se pudo obtener access token');
+            // 1) Autenticación OAuth2 con Service Account
+            const auth = new GoogleAuth({
+              credentials: {
+                client_email: process.env.GS_CLIENT_EMAIL,
+                private_key: (process.env.GS_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+              },
+              scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+            });
+            const client = await auth.getClient();
+            const { token } = await client.getAccessToken();
+            if (!token) throw new Error('No se pudo obtener access token');
 
             // Helper: escribe en la siguiente fila REAL (debajo del último registro)
             const appendExactRow = async ({ sheetName, endColLetter, rowValues }) => {
@@ -238,16 +238,16 @@ module.exports = defineConfig({
           
           if (sink === 'sheets' && hasValidCredentials) {
             try {
-              const auth = new GoogleAuth({
-                credentials: {
-                  client_email: process.env.GS_CLIENT_EMAIL,
-                  private_key: (process.env.GS_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-                },
-                scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-              });
-              const client = await auth.getClient();
-              const { token } = await client.getAccessToken();
-              if (!token) throw new Error('No se pudo obtener access token');
+            const auth = new GoogleAuth({
+              credentials: {
+                client_email: process.env.GS_CLIENT_EMAIL,
+                private_key: (process.env.GS_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+              },
+              scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+            });
+            const client = await auth.getClient();
+            const { token } = await client.getAccessToken();
+            if (!token) throw new Error('No se pudo obtener access token');
 
             // Helper común: escribe en la fila exacta debajo del último registro
             const appendExactRow = async ({ sheetName, endColLetter, rowValues, spreadsheetId }) => {

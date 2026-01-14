@@ -167,10 +167,19 @@ Cypress.Commands.add('procesarResultadosPantalla', (pantalla) => {
   let chain = cy.wrap(null);
   todosLosResultados.forEach((resultado, index) => {
     chain = chain.then(() => {
+      // Normalizar número de caso: extraer solo los dígitos y formatear como TC001, TC002, etc.
+      let numeroNormalizado = String(resultado.numero || '').trim();
+      // Si ya tiene formato TC001, extraer solo los dígitos
+      if (numeroNormalizado.toUpperCase().startsWith('TC')) {
+        numeroNormalizado = numeroNormalizado.replace(/^TC/i, '');
+      }
+      // Asegurar formato TC + 3 dígitos
+      const paso = `TC${String(numeroNormalizado).padStart(3, '0')}`;
+      
       return cy.task('guardarEnLog', {
         testId: testId,
         test: pantalla,
-        paso: `TC${String(resultado.numero).padStart(3, '0')}`,
+        paso: paso,
         fechaHora: fechaHoraFormateada,
         resultado: resultado.resultado,
         nombre: resultado.nombre,
