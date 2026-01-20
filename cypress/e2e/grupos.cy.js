@@ -1190,93 +1190,6 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
     });
   }
 
-  function seleccionarOpcionEnModal(aliasModal, textoOpcion) {
-    return cy.get(aliasModal).then(($modal) => {
-      const $select = $modal.find('select:visible').first();
-      if ($select.length) {
-        const opciones = $select.find('option').toArray();
-        let opcionElegida = opciones.find((opt) => {
-          const texto = Cypress.$(opt).text().trim();
-          return textoOpcion && new RegExp(textoOpcion, 'i').test(texto);
-        });
-        if (!opcionElegida) {
-          opcionElegida = opciones.find((opt) => Cypress.$(opt).val()) || opciones[0];
-        }
-        if (opcionElegida) {
-          const valor = Cypress.$(opcionElegida).val() || Cypress.$(opcionElegida).text().trim();
-          if (valor) {
-            cy.wrap($select).select(valor, { force: true });
-            cy.wait(300);
-            return;
-          }
-        }
-      }
-
-      const openers = [
-        '[role="combobox"]:visible',
-        '[aria-haspopup="listbox"]:visible',
-        '[aria-expanded="true"]:visible',
-        '.choices:visible',
-        '.fi-select-trigger:visible',
-        '.fi-input:visible',
-        '.fi-field:visible',
-        '.fi-input-wrp:visible',
-        'button:visible',
-        '[role="button"]:visible'
-      ];
-
-      let $trigger = Cypress.$();
-      for (const selector of openers) {
-        const candidato = $modal.find(selector).first();
-        if (candidato.length) {
-          $trigger = candidato;
-          break;
-        }
-      }
-
-      if ($trigger.length) {
-        cy.wrap($trigger).scrollIntoView().click({ force: true });
-      } else {
-        cy.wrap($modal).click('center', { force: true });
-      }
-
-      cy.wait(300);
-
-      let $opciones = $modal.find('[role="option"]:visible');
-      if (!$opciones.length) {
-        $opciones = Cypress.$('[role="option"]:visible');
-      }
-
-      if ($opciones.length) {
-        let $objetivo = textoOpcion
-          ? $opciones.filter((_, el) => new RegExp(textoOpcion, 'i').test(Cypress.$(el).text().trim())).first()
-          : $opciones.first();
-
-        if (!$objetivo.length) {
-          $objetivo = $opciones.first();
-        }
-
-        cy.wrap($objetivo).click({ force: true });
-        return;
-      }
-
-      const dropdownScopes =
-        '.fi-modal:visible .fi-dropdown-panel:visible, .fi-modal:visible .fi-select-panel:visible, [role="listbox"]:visible, .choices__list--dropdown:visible, ul:visible';
-
-      cy.get('body').then(($body) => {
-        if ($body.find(dropdownScopes).length) {
-          cy.get(dropdownScopes, { timeout: 10000 }).first().within(() => {
-            cy.contains(':visible', textoOpcion ? new RegExp(textoOpcion, 'i') : /\S+/, { timeout: 10000 }).click({ force: true });
-          });
-        } else {
-          cy.contains('.fi-modal:visible :visible', textoOpcion ? new RegExp(textoOpcion, 'i') : /\S+/, { timeout: 10000 })
-            .first()
-            .click({ force: true });
-        }
-      });
-    });
-  }
-
   function seleccionarJornadaEnModal(aliasModal, textoOpcion) {
     const termino = textoOpcion || '';
     return cy.get(aliasModal).within(() => {
@@ -1427,28 +1340,6 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
         }).then(() => cy.wait(300));
       });
     });
-  }
-
-  function aplicarFiltroSelect(nombreCampo, textoOpcion) {
-    cy.contains('button[title*="Filtrar"], button[aria-label*="Filtrar"], button[title*="Filter"], button[aria-label*="Filter"]', {
-      timeout: 10000
-    }).first().click({ force: true });
-
-    cy.get('.fi-dropdown-panel:visible, .fi-modal:visible, [role="dialog"]:visible', { timeout: 10000 })
-      .should('be.visible')
-      .within(() => {
-        cy.contains('label, span, div', new RegExp(nombreCampo, 'i'), { timeout: 10000 })
-          .should('be.visible')
-          .then(($label) => {
-            const contenedor = $label.closest('.fi-field, .fi-fo-field-wrp, .fi-fo-field, div, fieldset');
-            if (contenedor) {
-              cy.wrap(contenedor).within(() => seleccionarOpcionChoices(textoOpcion));
-            }
-          });
-      });
-
-    cy.wait(800);
-    return cy.get('.fi-ta-row:visible').should('have.length.greaterThan', 0);
   }
 
   function obtenerValorEmpresa(casoExcel) {

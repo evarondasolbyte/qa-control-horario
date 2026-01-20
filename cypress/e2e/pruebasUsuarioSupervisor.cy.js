@@ -231,13 +231,6 @@ describe('PRUEBAS USUARIO SUPERVISOR - Validación completa con gestión de erro
   }
 
   // === Helper: extraer texto desde nombre ===
-  function extraerDesdeNombre(nombreCaso, prefijo) {
-    if (!nombreCaso || !prefijo) return '';
-    const regex = new RegExp(`${prefijo}\\s+(.+?)(?:\\s|$)`, 'i');
-    const match = String(nombreCaso).match(regex);
-    return match ? match[1].trim() : '';
-  }
-
   // === MAPEO DE FUNCIONES ===
   function obtenerFuncionPorNombre(nombreFuncion) {
     const funciones = {

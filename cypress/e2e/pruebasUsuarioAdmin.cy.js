@@ -362,15 +362,6 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
       .type(valor, { force: true });
   }
 
-  function navegarAMenu(menuItem) {
-    cy.get('button[aria-label="open drawer"], button[aria-label*="menu"]', { timeout: 10000 }).should('exist').click({ force: true });
-    cy.wait(500);
-    cy.contains('.MuiDrawer-root, nav, [role="navigation"]', menuItem, { timeout: 10000 })
-      .scrollIntoView()
-      .click({ force: true });
-    cy.wait(1000);
-  }
-
   // === MAPEO DE FUNCIONES ===
   function obtenerFuncionPorNombre(nombreFuncion) {
     const funciones = {
@@ -2290,14 +2281,6 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
         cy.wait(2000);
         return cy.wrap(true);
       });
-  }
-
-  function jornadaSemanalCrearMaxHoras2(casoExcel) {
-    return jornadaSemanalCrearMaxHoras(casoExcel);
-  }
-
-  function jornadaSemanalCrearMinHoras2(casoExcel) {
-    return jornadaSemanalCrearMinHoras(casoExcel);
   }
 
 });

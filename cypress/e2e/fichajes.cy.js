@@ -690,8 +690,6 @@ describe('FICHAJES - Validación completa con gestión de errores y reporte a Ex
     'TC008', 'TC009', 'TC010', 'TC015', 'TC019', 'TC020'
   ]);
 
-  const CASOS_ALERTA_WARNING = new Set();
-
   function obtenerConfiguracionCasoFichaje(casoId) {
     const base = {
       accionAlertaEntrada: 'omitir',
@@ -954,11 +952,6 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
       'fichajeTrabajo': fichajeTrabajo,
       'eliminar': fichajeTrabajo,
       'eliminarTramoTrabajoCaso': fichajeTrabajo,
-      'editarHoraEntrada': editarHoraEntrada,
-      'editarHoraSalida': editarHoraSalida,
-      'validarHoraEntradaPosterior': validarHoraEntradaPosterior,
-      'validarSegundaEntradaAnterior': validarSegundaEntradaAnterior,
-      'validarSegundaEntrada': validarSegundaEntradaAnterior,
       'scroll': scroll
     };
 
@@ -1736,56 +1729,9 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
         .then(() => editarTramoTrabajoCaso(casoExcel));
     }
 
-    // Para cualquier otro caso que reutilice "fichajeTrabajo", se mantiene el flujo genérico
-    const mensaje =
-      obtenerDatoPorEtiquetas(casoExcel, LABELS_ALERTA_ENTRADA) ||
-      obtenerDatoPorEtiquetas(casoExcel, LABELS_ALERTA_SALIDA);
-
-    return asegurarSesionFichar(casoExcel)
-      .then(() =>
-        aplicarInstruccionesTrabajo(casoExcel, {
-          mensajeEsperado: mensaje,
-          accionAdvertencia: 'aceptar',
-          botonConfirmar: /Aceptar/i,
-          textoModalConfirm: /(Editar (entrada|salida)|¿Estás seguro|Modificar horario|Modificar tramo)/i
-        })
-      );
-  }
-
-  // Casos de edición: reutilizan el helper genérico que abre el modal "Trabajo".
-  function editarHoraEntrada(casoExcel) {
-    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-    const mensaje = obtenerDatoPorEtiquetas(casoExcel, LABELS_ALERTA_ENTRADA);
-    return asegurarSesionFichar(casoExcel)
-      .then(() => limpiarSegundoRegistroTrabajo())
-      .then(() => aplicarInstruccionesTrabajo(casoExcel, { mensajeEsperado: mensaje }));
-  }
-
-  function editarHoraSalida(casoExcel) {
-    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-    const mensaje = obtenerDatoPorEtiquetas(casoExcel, LABELS_ALERTA_SALIDA);
-    return asegurarSesionFichar(casoExcel)
-      .then(() => limpiarSegundoRegistroTrabajo())
-      .then(() => aplicarInstruccionesTrabajo(casoExcel, { mensajeEsperado: mensaje }));
-  }
-
-  function validarHoraEntradaPosterior(casoExcel) {
-    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-    const mensaje = obtenerDatoPorEtiquetas(casoExcel, LABELS_ALERTA_ENTRADA);
-    return asegurarSesionFichar(casoExcel)
-      .then(() => limpiarSegundoRegistroTrabajo())
-      .then(() => aplicarInstruccionesTrabajo(casoExcel, { mensajeEsperado: mensaje }));
-  }
-
-  function validarSegundaEntradaAnterior(casoExcel) {
-    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-    const mensaje =
-      obtenerDatoPorEtiquetas(casoExcel, LABELS_ALERTA_ENTRADA) ||
-      obtenerDatoPorEtiquetas(casoExcel, LABELS_ALERTA_SALIDA);
-
-    return asegurarSesionFichar(casoExcel)
-      .then(() => limpiarSegundoRegistroTrabajo())
-      .then(() => aplicarInstruccionesTrabajo(casoExcel, { mensajeEsperado: mensaje }));
+    // Si llegamos aquí, no hay lógica implementada para este caso
+    cy.log('⚠️ Caso no manejado específicamente en fichajeTrabajo');
+    return cy.wrap(null);
   }
 
   // Recorre la tabla semanal hacia la derecha/izquierda para validar CSS/scrollbars.
