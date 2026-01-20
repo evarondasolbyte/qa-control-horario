@@ -2301,4 +2301,3 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
   }
 
 });
-

@@ -60,4 +60,3 @@ describe('PORTAL EMPLEADO SUPERADMIN - Agrupación de suites de pruebas', () => 
   });
 
 });
-

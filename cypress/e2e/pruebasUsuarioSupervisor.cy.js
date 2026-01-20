@@ -182,7 +182,7 @@ describe('PRUEBAS USUARIO SUPERVISOR - Validación completa con gestión de erro
           $body.find('h1:contains("500"), h2:contains("500"), h1:contains("Error"), h2:contains("Error")').length > 0;
 
         if (tieneError500) {
-          cy.log('⚠️ Error 500 detectado en la página');
+          cy.log(' Error 500 detectado en la página');
           cy.registrarResultados({
             numero,
             nombre,
@@ -404,7 +404,7 @@ describe('PRUEBAS USUARIO SUPERVISOR - Validación completa con gestión de erro
     }
 
     // Si no se encuentra, devolver función vacía
-    cy.log(`⚠️ Función no encontrada: "${nombreFuncion}"`);
+    cy.log(` Función no encontrada: "${nombreFuncion}"`);
     cy.log(`Funciones disponibles por nombre: ${Object.keys(funcionesPorNombre).join(', ')}`);
     return () => {
       cy.log(`Ejecutando función vacía para: "${nombreFuncion}"`);
@@ -1034,5 +1034,3 @@ describe('PRUEBAS USUARIO SUPERVISOR - Validación completa con gestión de erro
     return 'Pantalla';
   }
 });
-
-

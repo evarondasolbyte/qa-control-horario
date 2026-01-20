@@ -790,7 +790,7 @@ describe('FICHAJES - Validación completa con gestión de errores y reporte a Ex
    * - IMPORTANTÍSIMO: NO usa should('have.length.greaterThan',1) para no romper.
    */
 function limpiarSegundoRegistroTrabajoSiExiste() {
-  cy.log('🧹 Limpieza: comprobar y eliminar 2º registro en Trabajo');
+  cy.log(' Limpieza: comprobar y eliminar 2º registro en Trabajo');
 
   const bloque = '#work-session-block';
   const filas  = '#work-session-block .time-entry';
@@ -802,15 +802,15 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
 
   return cy.get('body', { timeout: 10000 }).then(($body) => {
     if (!$body.find(bloque).length) {
-      cy.log('ℹ️ No existe bloque Trabajo');
+      cy.log(' No existe bloque Trabajo');
       return cy.wrap(null);
     }
 
     const total = $body.find(filas).length;
-    cy.log(`ℹ️ Registros en Trabajo: ${total}`);
+    cy.log(` Registros en Trabajo: ${total}`);
 
     if (total <= 1) {
-      cy.log('ℹ️ No hay segundo registro que eliminar');
+      cy.log(' No hay segundo registro que eliminar');
       return cy.wrap(null);
     }
 
@@ -825,13 +825,13 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
         if ($start.length) return cy.wrap($start.first()).click({ force: true });
         if ($end.length)   return cy.wrap($end.first()).click({ force: true });
 
-        cy.log('⚠️ No hay input visible en el 2º registro');
+        cy.log(' No hay input visible en el 2º registro');
         return cy.wrap(null);
       })
 
       // 2) Click directo al botón rojo "Eliminar" (SIN :visible)
       .then(() => {
-        cy.log('🗑️ Click Eliminar (selector directo, sin :visible)');
+        cy.log(' Click Eliminar (selector directo, sin :visible)');
         return cy.get('button.time-edit-btn.time-edit-btn-danger', { timeout: 10000 })
           .last()
           .click({ force: true });
@@ -841,7 +841,7 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
       .then(() => {
         return cy.get('body', { timeout: 4000 }).then(($b) => {
           if ($b.find(btnSi).length) {
-            cy.log('✅ Confirmando eliminación (Sí)');
+            cy.log(' Confirmando eliminación (Sí)');
             return cy.get(btnSi, { timeout: 8000 })
               .click({ force: true });
           }
@@ -851,7 +851,7 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
 
       .then(() => cy.wait(300))
       .then(() => {
-        cy.log('✅ Limpieza terminada');
+        cy.log(' Limpieza terminada');
         return cy.wrap(null);
       });
   });
@@ -1308,7 +1308,7 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
       const hoyISO = new Date().toISOString().slice(0, 10);
       chain = chain
         .then(() => {
-          cy.log('📝 TC026/TC027: Registrando entrada para crear segundo registro');
+          cy.log(' TC026/TC027: Registrando entrada para crear segundo registro');
           const pasoEntrada = { fecha: hoyISO, hora: '10:00' };
           return rellenarCamposEntrada(pasoEntrada);
         })
@@ -1323,7 +1323,7 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
         })
         .then(() => cy.wait(800))
         .then(() => {
-          cy.log('📝 TC026/TC027: Registrando salida para completar el registro');
+          cy.log(' TC026/TC027: Registrando salida para completar el registro');
           const pasoSalida = { fecha: hoyISO, hora: '11:00' };
           return rellenarCamposSalida(pasoSalida);
         })
@@ -1606,7 +1606,7 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
   // Eliminación directa del bloque Trabajo para TC030
   // ────────────────────────────────
   function eliminarTramoTrabajoCaso(casoExcel) {
-    cy.log('🗑️ TC030: Creando registro y luego eliminando segundo registro en Trabajo');
+    cy.log(' TC030: Creando registro y luego eliminando segundo registro en Trabajo');
 
     const bloque = '#work-session-block';
     const filas = '#work-session-block .time-entry';
@@ -1622,7 +1622,7 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
     // 1) Primero crear un nuevo registro (entrada y salida)
     chain = chain
       .then(() => {
-        cy.log('📝 TC030: Registrando entrada para crear segundo registro');
+        cy.log(' TC030: Registrando entrada para crear segundo registro');
         const pasoEntrada = { fecha: hoyISO, hora: '10:00' };
         return rellenarCamposEntrada(pasoEntrada);
       })
@@ -1637,7 +1637,7 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
       })
       .then(() => cy.wait(800))
       .then(() => {
-        cy.log('📝 TC030: Registrando salida para completar el registro');
+        cy.log(' TC030: Registrando salida para completar el registro');
         const pasoSalida = { fecha: hoyISO, hora: '11:00' };
         return rellenarCamposSalida(pasoSalida);
       })
@@ -1660,15 +1660,15 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
     chain = chain.then(() => {
       return cy.get('body', { timeout: 10000 }).then(($body) => {
         if (!$body.find(bloque).length) {
-          cy.log('ℹ️ No existe bloque Trabajo');
+          cy.log(' No existe bloque Trabajo');
           return cy.wrap(null);
         }
 
         const total = $body.find(filas).length;
-        cy.log(`ℹ️ Registros en Trabajo: ${total}`);
+        cy.log(` Registros en Trabajo: ${total}`);
 
         if (total <= 1) {
-          cy.log('ℹ️ No hay segundo registro que eliminar');
+          cy.log(' No hay segundo registro que eliminar');
           return cy.wrap(null);
         }
 
@@ -1683,13 +1683,13 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
             if ($start.length) return cy.wrap($start.first()).click({ force: true });
             if ($end.length) return cy.wrap($end.first()).click({ force: true });
 
-            cy.log('⚠️ No hay input visible en el 2º registro');
+            cy.log(' No hay input visible en el 2º registro');
             return cy.wrap(null);
           })
 
           // 2) Click directo al botón rojo "Eliminar" (SIN :visible)
           .then(() => {
-            cy.log('🗑️ Click Eliminar (selector directo, sin :visible)');
+            cy.log(' Click Eliminar (selector directo, sin :visible)');
             return cy.get('button.time-edit-btn.time-edit-btn-danger', { timeout: 10000 })
               .last()
               .click({ force: true });
@@ -1699,7 +1699,7 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
           .then(() => {
             return cy.get('body', { timeout: 4000 }).then(($b) => {
               if ($b.find(btnSi).length) {
-                cy.log('✅ Confirmando eliminación (Sí)');
+                cy.log(' Confirmando eliminación (Sí)');
                 return cy.get(btnSi, { timeout: 8000 })
                   .click({ force: true });
               }
@@ -1709,7 +1709,7 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
 
           .then(() => cy.wait(300))
           .then(() => {
-            cy.log('✅ Eliminación completada');
+            cy.log(' Eliminación completada');
             return cy.wrap(null);
           });
       });

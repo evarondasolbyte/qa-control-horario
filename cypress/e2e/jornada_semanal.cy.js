@@ -107,7 +107,7 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
               }
               
               // Si realmente no hay nada, lanzar error
-              cy.log('⚠️ No se encontró tabla ni mensaje de sin datos');
+              cy.log(' No se encontró tabla ni mensaje de sin datos');
               throw new Error('No se encontró la tabla ni mensaje de sin datos');
             });
           });
