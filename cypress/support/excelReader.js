@@ -51,7 +51,10 @@ Cypress.Commands.add('leerDatosGoogleSheets', (pantalla) => {
   
   const pantallaNormalizada = (pantalla || 'datos').toLowerCase();
   const gid = gidMap[pantallaNormalizada] || '0';
-  const range = 'A:AK';
+  // IMPORTANTE:
+  // Varias pantallas (p.ej. Jornadas Diarias) necesitan MÁS de 10 bloques de etiqueta/valor/dato.
+  // Con A:AK (37 cols) no caben; ampliamos a A:BM (~65 cols) para soportar más bloques.
+  const range = 'A:BM';
   const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${gid}&range=${encodeURIComponent(range)}`;
 
   cy.log(`🔍 Leyendo hoja ${pantalla} (gid=${gid}) desde: ${csvUrl}`);
@@ -60,8 +63,8 @@ Cypress.Commands.add('leerDatosGoogleSheets', (pantalla) => {
     if (response.status === 200 && response.body) {
       let filasExcel = parseCsvRespectingQuotes(response.body);
 
-      // Normalizar número de columnas (hasta AK => 37 columnas)
-      const COLS = 37;
+      // Normalizar número de columnas (hasta BM => 65 columnas)
+      const COLS = 65;
       filasExcel = filasExcel.map(f => {
         const row = Array.from(f);
         while (row.length < COLS) row.push('');
@@ -123,8 +126,10 @@ Cypress.Commands.add('obtenerDatosExcel', (pantalla) => {
           funcion       : safe(fila[5])
         };
 
-        // Procesar bloques etiqueta/valor/dato (hasta 11 bloques => columnas G..AK)
-        for (let idx = 1; idx <= 11; idx++) {
+        // Procesar bloques etiqueta/valor/dato (dinámico en función de las columnas disponibles)
+        // Columnas fijas: A..F (0..5). Bloques empiezan en G (índice 6), 3 cols por bloque.
+        const maxBloques = Math.max(0, Math.floor(((headers.length || fila.length) - 6) / 3));
+        for (let idx = 1; idx <= maxBloques; idx++) {
           const base = 6 + (idx - 1) * 3;
           dato[`etiqueta_${idx}`]        = safe(fila[base]);
           dato[`valor_etiqueta_${idx}`]  = safe(fila[base + 1]);

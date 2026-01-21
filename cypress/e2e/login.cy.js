@@ -95,27 +95,27 @@ describe('LOGIN - Validación completa con gestión de errores y reporte a Excel
       }
 
       // Si estamos en panel interno, usar el método original
-      return cy.get('body').then($body => {
-        // 1) Botón de un form /logout
-        const selForm = 'form[action*="/logout"] button[type="submit"]';
-        if ($body.find(selForm).length) {
-          cy.log('Encontrado botón Salir vía form[action*="/logout"]');
-          return cy.get(selForm).scrollIntoView().click({ force: true });
-        }
+    return cy.get('body').then($body => {
+      // 1) Botón de un form /logout
+      const selForm = 'form[action*="/logout"] button[type="submit"]';
+      if ($body.find(selForm).length) {
+        cy.log('Encontrado botón Salir vía form[action*="/logout"]');
+        return cy.get(selForm).scrollIntoView().click({ force: true });
+      }
 
-        // 2) Cualquier button/a/[role=button] cuyo texto contenga "Salir"
-        const textoSalir = /Salir/i;
-        const $btnText = $body.find('button, a, [role="button"]').filter((_, el) => textoSalir.test(el.innerText || ''));
-        if ($btnText.length) {
-          cy.log('Encontrado botón Salir por texto visible');
-          return cy.wrap($btnText.eq(0)).scrollIntoView().click({ force: true });
-        }
+      // 2) Cualquier button/a/[role=button] cuyo texto contenga "Salir"
+      const textoSalir = /Salir/i;
+      const $btnText = $body.find('button, a, [role="button"]').filter((_, el) => textoSalir.test(el.innerText || ''));
+      if ($btnText.length) {
+        cy.log('Encontrado botón Salir por texto visible');
+        return cy.wrap($btnText.eq(0)).scrollIntoView().click({ force: true });
+      }
 
-        // 3) Fallback: en algunos temas el botón está en un header lateral
-        cy.log('Botón Salir no visible directo, intento alternativo por contains');
-        return cy.contains('button, a, [role="button"]', textoSalir, { timeout: 3000 })
-          .scrollIntoView()
-          .click({ force: true });
+      // 3) Fallback: en algunos temas el botón está en un header lateral
+      cy.log('Botón Salir no visible directo, intento alternativo por contains');
+      return cy.contains('button, a, [role="button"]', textoSalir, { timeout: 3000 })
+        .scrollIntoView()
+        .click({ force: true });
       });
     });
   }
@@ -311,13 +311,13 @@ describe('LOGIN - Validación completa con gestión de errores y reporte a Excel
 
       // Si estamos en /panelinterno, continuar con la lógica normal
       cy.log('TC010: En panel interno, ejecutando logout desde menú de usuario');
-      
-      return abrirMenuUsuario()
-        .within(() => {
-          cy.get('form[action*="/logout"] button[type="submit"]', { timeout: 10000 })
-            .should('exist')
-            .click({ force: true });
-        })
+
+    return abrirMenuUsuario()
+      .within(() => {
+        cy.get('form[action*="/logout"] button[type="submit"]', { timeout: 10000 })
+          .should('exist')
+          .click({ force: true });
+      })
         .then(() => {
           // Después del logout puede redirigir a /login o a / (raíz), ambos son válidos
           cy.url({ timeout: 15000 }).should((url) => {
@@ -391,11 +391,11 @@ describe('LOGIN - Validación completa con gestión de errores y reporte a Excel
 
       // Si ya estamos en panel interno, ejecutar la prueba directamente
       cy.log('TC011: Cambiando a modo claro');
-      
-      return abrirMenuUsuario().within(() => {
-        cy.get('button[aria-label="A modo claro"]').should('exist').click({ force: true });
-      }).then(() => {
-        expect(localStorage.getItem('theme')).to.eq('light');
+
+    return abrirMenuUsuario().within(() => {
+      cy.get('button[aria-label="A modo claro"]').should('exist').click({ force: true });
+    }).then(() => {
+      expect(localStorage.getItem('theme')).to.eq('light');
         return cy.url().should((url) => {
           expect(url).to.satisfy((u) => u.includes('/panelinterno') || u.includes('/fichar'));
         });
@@ -467,11 +467,11 @@ describe('LOGIN - Validación completa con gestión de errores y reporte a Excel
 
       // Si ya estamos en panel interno, ejecutar la prueba directamente
       cy.log('TC012: Cambiando a modo oscuro');
-      
-      return abrirMenuUsuario().within(() => {
-        cy.get('button[aria-label="A modo oscuro"]').should('exist').click({ force: true });
-      }).then(() => {
-        expect(localStorage.getItem('theme')).to.eq('dark');
+
+    return abrirMenuUsuario().within(() => {
+      cy.get('button[aria-label="A modo oscuro"]').should('exist').click({ force: true });
+    }).then(() => {
+      expect(localStorage.getItem('theme')).to.eq('dark');
         return cy.url().should((url) => {
           expect(url).to.satisfy((u) => u.includes('/panelinterno') || u.includes('/fichar'));
         });
@@ -543,11 +543,11 @@ describe('LOGIN - Validación completa con gestión de errores y reporte a Excel
 
       // Si ya estamos en panel interno, ejecutar la prueba directamente
       cy.log('TC013: Cambiando a modo del sistema');
-      
-      return abrirMenuUsuario().within(() => {
-        cy.get('button[aria-label="A modo del sistema"]').should('exist').click({ force: true });
-      }).then(() => {
-        expect(localStorage.getItem('theme')).to.eq('system');
+
+    return abrirMenuUsuario().within(() => {
+      cy.get('button[aria-label="A modo del sistema"]').should('exist').click({ force: true });
+    }).then(() => {
+      expect(localStorage.getItem('theme')).to.eq('system');
         return cy.url().should((url) => {
           expect(url).to.satisfy((u) => u.includes('/panelinterno') || u.includes('/fichar'));
         });

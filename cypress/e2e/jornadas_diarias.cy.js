@@ -7,6 +7,29 @@ describe('JORNADAS DIARIAS - Validación completa con gestión de errores y repo
   const DASHBOARD_PATH = '/panelinterno';
 
   // ================= Helpers =================
+  /**
+   * Envía Escape a nivel de documento (no al elemento enfocado), para evitar que Cypress
+   * intente "escribir" {esc} dentro de inputs type="time" (lo interpreta como hora inválida).
+   */
+  function pulsarEscape(veces = 1) {
+    return cy.window({ log: false }).then((win) => {
+      // Si hay un input enfocado (especialmente type="time"), lo desenfocamos.
+      try {
+        const active = win.document?.activeElement;
+        if (active && typeof active.blur === 'function') active.blur();
+      } catch (e) {
+        // noop
+      }
+
+      for (let i = 0; i < veces; i++) {
+        const down = new win.KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true });
+        const up = new win.KeyboardEvent('keyup', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true });
+        win.document.dispatchEvent(down);
+        win.document.dispatchEvent(up);
+      }
+    }).then(() => cy.wait(50, { log: false }));
+  }
+
   function normalizarValor(valor) {
     if (!valor) return '';
     const v = String(valor).trim();
@@ -28,7 +51,7 @@ describe('JORNADAS DIARIAS - Validación completa con gestión de errores y repo
 
   // ============== Acciones pie de formulario ==============
   function scrollHastaAcciones() {
-    cy.get('body').type('{esc}{esc}');
+    pulsarEscape(2);
     const candidatos = ['form:visible', '.fi-main:visible', '.fi-body:visible', 'main:visible', '.fi-layout:visible', 'body', 'html'];
     candidatos.forEach(sel => {
       cy.get('body').then($b => {
@@ -88,14 +111,29 @@ describe('JORNADAS DIARIAS - Validación completa con gestión de errores y repo
     cy.procesarResultadosPantalla('Jornadas Diarias');
   });
 
+  // Si está vacío, se ejecutan todos los casos que no estén en CASOS_PAUSADOS
+  // Ejecutar todos los casos que no estén pausados
+  const CASOS_OK = new Set();
+  // No pausar ningún caso (ejecutar todos)
+  const CASOS_PAUSADOS = new Set();
+
   it('Ejecutar todos los casos de Jornadas Diarias desde Google Sheets', () => {
     cy.obtenerDatosExcel('Jornadas Diarias').then((casosExcel) => {
       cy.log(`Cargados ${casosExcel.length} casos desde Excel para Jornadas Diarias`);
 
       const prioridadFiltro = (Cypress.env('prioridad') || '').toString().toUpperCase();
-      const casosFiltrados = prioridadFiltro && prioridadFiltro !== 'TODAS'
+      let casosFiltrados = prioridadFiltro && prioridadFiltro !== 'TODAS'
         ? casosExcel.filter(c => (c.prioridad || '').toUpperCase() === prioridadFiltro)
         : casosExcel;
+
+      casosFiltrados = casosFiltrados.filter((caso) => {
+        const id = String(caso.caso || '').trim().toUpperCase();
+        if (CASOS_PAUSADOS.has(id)) return false;
+        if (CASOS_OK.size === 0) return true;
+        return CASOS_OK.has(id);
+      });
+
+      cy.log(`Casos OK a ejecutar: ${casosFiltrados.length} -> ${casosFiltrados.map(c => c.caso).join(', ')}`);
 
       let chain = cy.wrap(null);
       casosFiltrados.forEach((casoExcel, idx) => {
@@ -118,7 +156,7 @@ describe('JORNADAS DIARIAS - Validación completa con gestión de errores y repo
           const hayPanelLateral = $body.find('[class*="overlay"], [class*="modal"], [class*="drawer"], [class*="sidebar"]').length > 0;
           if (hayPanelLateral) {
             cy.log('Cerrando panel lateral...');
-            cy.get('body').type('{esc}');
+            pulsarEscape(1);
             cy.wait(500);
           }
         });
@@ -153,7 +191,7 @@ describe('JORNADAS DIARIAS - Validación completa con gestión de errores y repo
           
           // Si no hay tabla ni mensaje, esperar un poco más y buscar la tabla
           cy.log('Esperando a que la tabla se cargue...');
-          return cy.get('.fi-ta-table, table', { timeout: 20000 }).should('exist').catch(() => {
+          return cy.get('.fi-ta-table, table', { timeout: 20000 }).should('exist').then(null, () => {
             // Si después del timeout no hay tabla, verificar una última vez si hay mensaje de sin datos
             return cy.get('body', { timeout: 2000 }).then(($body2) => {
               const textoBody2 = $body2.text().toLowerCase();
@@ -438,7 +476,8 @@ describe('JORNADAS DIARIAS - Validación completa con gestión de errores y repo
         $el.closest('[aria-disabled="true"], .fi-disabled, [data-disabled], .opacity-50, .pointer-events-none').length > 0;
 
       if (!estaDisabled) return;
-      const $campo = $el.closest('div, fieldset, section');
+      // IMPORTANTE: limitar el scope al contenedor más cercano para evitar pulsar switches de otra sección
+      const $campo = $el.closest('fieldset, section, div').first();
 
       let $toggle = $campo.find('[role="switch"]:visible, input[type="checkbox"]:visible, .fi-toggle:visible, button[aria-pressed]:visible').first();
       if ($toggle.length) {
@@ -460,10 +499,73 @@ describe('JORNADAS DIARIAS - Validación completa con gestión de errores y repo
       }
 
       cy.get('form:visible').first().then($form => {
+        // Último recurso MUY conservador: no pulsar el primer switch del form completo, porque suele ser el de "inicio"
+        // Preferimos no hacer nada antes que habilitar el switch incorrecto.
         const $sw = $form.find('[role="switch"]:visible, .fi-toggle:visible, input[type="checkbox"]:visible').first();
-        if ($sw.length) cy.wrap($sw.first()).scrollIntoView().click({ force: true });
+        if ($sw.length) cy.log('⚠️ Campo deshabilitado pero no se encontró switch cercano; evitando pulsar un switch genérico del formulario');
       });
     });
+  }
+
+  // ===== Toggles por sección (evita pulsar el switch equivocado) =====
+  function activarSwitchRangoHorario({ legendRe, labelRe, toggleId }) {
+    // Intento 1: por id exacto (usando attribute selector para evitar escapar '.')
+    const byId = `button[role="switch"][id="${toggleId}"], [role="switch"][id="${toggleId}"]`;
+    return cy.get('body').then(($body) => {
+      if ($body.find(byId).length) {
+        return cy.get(byId, { timeout: 10000 })
+          .first()
+          .then(($toggle) => {
+            const checked = String($toggle.attr('aria-checked')).toLowerCase() === 'true';
+            if (!checked) cy.wrap($toggle).scrollIntoView().click({ force: true });
+          });
+      }
+
+      // Intento 2: por sección (legend) + label del switch
+      const legends = Array.from($body.find('legend') || []);
+      const matchLegend = legends.find((el) => legendRe.test((el.innerText || '').trim()));
+      if (!matchLegend) return cy.wrap(null);
+
+      const $fieldset = Cypress.$(matchLegend).closest('fieldset');
+      if (!$fieldset.length) return cy.wrap(null);
+
+      const labels = $fieldset.find('label').toArray();
+      const matchLabel = labels.find((el) => labelRe.test((el.innerText || '').trim()));
+      if (!matchLabel) return cy.wrap(null);
+
+      const $toggle = Cypress.$(matchLabel).find('button[role="switch"], [role="switch"]').first();
+      if (!$toggle.length) return cy.wrap(null);
+
+      const checked = String($toggle.attr('aria-checked')).toLowerCase() === 'true';
+      if (!checked) cy.wrap($toggle).scrollIntoView().click({ force: true });
+      return cy.wrap(null);
+    });
+  }
+
+  function asegurarTogglePorCampoTiempo(selector) {
+    const sel = String(selector || '');
+    if (sel.includes('data.entry_start_window') || sel.includes('data.entry_end_window')) {
+      return activarSwitchRangoHorario({
+        legendRe: /rango\s+horario\s+para\s+iniciar/i,
+        labelRe: /activar\s+rango\s+de\s+inicio/i,
+        toggleId: 'data.entry_window_active',
+      });
+    }
+    if (sel.includes('data.exit_start_window') || sel.includes('data.exit_end_window')) {
+      return activarSwitchRangoHorario({
+        legendRe: /rango\s+horario\s+para\s+finalizar/i,
+        labelRe: /activar\s+rango\s+de\s+fin/i,
+        toggleId: 'data.exit_window_active',
+      });
+    }
+    if (sel.includes('data.duration_min') || sel.includes('data.duration_max')) {
+      return activarSwitchRangoHorario({
+        legendRe: /tiempo\s+m[ií]nimo|tiempo\s+m[aá]ximo|duraci[oó]n/i,
+        labelRe: /activar\s+rango\s+de\s+duraci[oó]n/i,
+        toggleId: 'data.duration_window_active',
+      });
+    }
+    return cy.wrap(null);
   }
 
   function normalizarHora(valor) {
@@ -481,30 +583,82 @@ describe('JORNADAS DIARIAS - Validación completa con gestión de errores y repo
   }
 
   function escribirCampoTiempo(selector, valor) {
-    return habilitarSiDeshabilitado(selector)
+    // Primero aseguramos el toggle correcto según el campo (evita que se active el de inicio por error).
+    return asegurarTogglePorCampoTiempo(selector)
+      .then(() => habilitarSiDeshabilitado(selector))
       .then(() => {
         const valorNormalizado = normalizarHora(valor);
         cy.get(selector, { timeout: 10000 })
           .first()
           .scrollIntoView()
           .clear({ force: true })
-          .type(valorNormalizado, { force: true });
+          .type(valorNormalizado, { force: true })
+          .blur({ force: true });
       });
+  }
+
+  function escribirCampoNumero(selector, valor) {
+    return habilitarSiDeshabilitado(selector).then(() => {
+      const v = (valor ?? '').toString().trim();
+      cy.get(selector, { timeout: 10000 })
+        .first()
+        .scrollIntoView()
+        .clear({ force: true })
+        .type(v, { force: true })
+        .blur({ force: true });
+    });
   }
 
   function obtenerCamposDesdeExcel(casoExcel) {
     const campos = {};
-    for (let i = 1; i <= 12; i++) {
+    // Leer dinámicamente todos los pares valor_etiqueta_N/dato_N disponibles (el Sheet puede tener > 12).
+    const keys = Object.keys(casoExcel || {});
+    const indices = keys
+      .map((k) => {
+        const m = /^valor_etiqueta_(\d+)$/.exec(k);
+        return m ? parseInt(m[1], 10) : null;
+      })
+      .filter((n) => Number.isInteger(n))
+      .sort((a, b) => a - b);
+
+    (indices.length ? indices : Array.from({ length: 30 }, (_, i) => i + 1)).forEach((i) => {
       const clave = casoExcel[`valor_etiqueta_${i}`];
       const valor = casoExcel[`dato_${i}`];
-      if (clave) campos[clave] = valor;
-    }
+      if (!clave) return;
+      // Si el Excel repite la misma clave (p.ej. data.entry_start_window) guardamos TODAS las ocurrencias.
+      if (Object.prototype.hasOwnProperty.call(campos, clave)) {
+        const prev = campos[clave];
+        if (Array.isArray(prev)) campos[clave] = [...prev, valor];
+        else campos[clave] = [prev, valor];
+      } else {
+        campos[clave] = valor;
+      }
+    });
     return campos;
+  }
+
+  function valorCampo(campos, clave, idx = 0) {
+    const v = campos?.[clave];
+    if (Array.isArray(v)) return v[idx];
+    return idx === 0 ? v : undefined;
+  }
+  function tieneValor(v) {
+    return v !== undefined && v !== null && String(v).trim() !== '';
   }
 
   function ejecutarCrearIndividual(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
     const campos = obtenerCamposDesdeExcel(casoExcel);
+    // Debug de alto valor: confirma si el Sheet está trayendo campos de "fin" (data.exit_*)
+    try {
+      const keys = Object.keys(campos || {});
+      const entryKeys = keys.filter(k => /data\.entry_/i.test(k));
+      const exitKeys = keys.filter(k => /data\.exit_/i.test(k));
+      cy.log(`🧾 Campos (entry): ${entryKeys.join(', ') || '(ninguno)'}`);
+      cy.log(`🧾 Campos (exit): ${exitKeys.join(', ') || '(ninguno)'}`);
+    } catch (e) {
+      // noop
+    }
     const numero = parseInt(String(casoExcel.caso).replace('TC', ''), 10);
 
     cy.url().then((current) => {
@@ -514,25 +668,30 @@ describe('JORNADAS DIARIAS - Validación completa con gestión de errores y repo
       }
     });
 
-    if (campos['data.company_id']) {
-      seleccionarOpcionSelect('.choices[data-type="select-one"], select#data\\.company_id', 'Empresa', campos['data.company_id']);
+    if (tieneValor(valorCampo(campos, 'data.company_id'))) {
+      seleccionarOpcionSelect('.choices[data-type="select-one"], select#data\\.company_id', 'Empresa', valorCampo(campos, 'data.company_id'));
     } else if (numero !== 20) {
       seleccionarOpcionSelect('.choices[data-type="select-one"], select#data\\.company_id', 'Empresa', 'Admin');
     }
 
-    if (campos['data.entry_category']) {
-      const tipo = normalizarValor(campos['data.entry_category']);
+    if (tieneValor(valorCampo(campos, 'data.entry_category'))) {
+      const tipo = normalizarValor(valorCampo(campos, 'data.entry_category'));
       seleccionarOpcionSelect(null, 'Tipo', tipo);
     } else if (![23].includes(numero)) {
       seleccionarOpcionSelect(null, 'Tipo', 'Jornada de trabajo');
     }
 
-    if (campos['data.name'] && numero !== 21) {
-      let nombre = campos['data.name'];
+    if (tieneValor(valorCampo(campos, 'data.name')) && numero !== 21) {
+      let nombre = valorCampo(campos, 'data.name');
       if (nombre.trim().endsWith('+')) {
         const base = nombre.trim().slice(0, -1);
         nombre = `${base}${contadorPrueba}`;
         contadorPrueba++;
+      }
+      // Si el nombre contiene "XXX", reemplazar con 3 números aleatorios (100-999)
+      if (nombre.includes('XXX')) {
+        const randomNum = Math.floor(Math.random() * 900) + 100; // Genera 3 dígitos (100-999)
+        nombre = nombre.replace('XXX', randomNum.toString());
       }
       cy.get('input[name="data.name"], input#data\\.name', { timeout: 10000 })
         .first()
@@ -546,19 +705,66 @@ describe('JORNADAS DIARIAS - Validación completa con gestión de errores y repo
         .clear({ force: true });
     }
 
-    if (campos['data.description']) {
+    if (tieneValor(valorCampo(campos, 'data.description'))) {
       cy.get('textarea#data\\.description, textarea[name="data.description"], trix-editor#data\\.description', { timeout: 10000 })
         .first()
         .scrollIntoView()
         .clear({ force: true })
-        .type(campos['data.description'], { force: true });
+        .type(valorCampo(campos, 'data.description'), { force: true });
     }
 
-    if (campos['data.entry_start_window']) {
-      escribirCampoTiempo('input[name="data.entry_start_window"], input#data\\.entry_start_window', campos['data.entry_start_window']);
+    // ===== Rangos horarios (Excel legacy) =====
+    // Tu Excel guarda el rango "finalizar" repitiendo data.entry_start_window / data.entry_end_window.
+    // - 1ª pareja (idx 0) => iniciar
+    // - 2ª pareja (idx 1) => finalizar
+    // Además, TC025 ("rango horario para finalizar") trae solo 1 pareja, y debe aplicarse a "finalizar".
+    const nombreCaso = String(casoExcel?.nombre || '');
+    const casoEsFinalizar = numero === 25 || /finalizar/i.test(nombreCaso);
+
+    const entryStart0 = valorCampo(campos, 'data.entry_start_window', 0);
+    const entryEnd0 = valorCampo(campos, 'data.entry_end_window', 0);
+    const entryStart1 = valorCampo(campos, 'data.entry_start_window', 1);
+    const entryEnd1 = valorCampo(campos, 'data.entry_end_window', 1);
+
+    const exitStart0 = valorCampo(campos, 'data.exit_start_window', 0);
+    const exitEnd0 = valorCampo(campos, 'data.exit_end_window', 0);
+
+    // INICIO: solo si el caso NO es "solo finalizar"
+    if (!casoEsFinalizar && (tieneValor(entryStart0) || tieneValor(entryEnd0))) {
+      activarSwitchRangoHorario({
+        legendRe: /rango\s+horario\s+para\s+iniciar/i,
+        labelRe: /activar\s+rango\s+de\s+inicio/i,
+        toggleId: 'data.entry_window_active',
+      });
+      cy.wait(200);
+      if (tieneValor(entryStart0)) escribirCampoTiempo('input[name="data.entry_start_window"], input#data\\.entry_start_window', entryStart0);
+      if (tieneValor(entryEnd0)) escribirCampoTiempo('input[name="data.entry_end_window"], input#data\\.entry_end_window', entryEnd0);
     }
-    if (campos['data.entry_end_window']) {
-      escribirCampoTiempo('input[name="data.entry_end_window"], input#data\\.entry_end_window', campos['data.entry_end_window']);
+
+    // FIN: prioridad a data.exit_* si existieran; si no, usar 2ª pareja entry_*; si el caso es "finalizar", usar 1ª pareja entry_*.
+    const finStart = tieneValor(exitStart0) ? exitStart0 : (tieneValor(entryStart1) ? entryStart1 : (casoEsFinalizar ? entryStart0 : undefined));
+    const finEnd = tieneValor(exitEnd0) ? exitEnd0 : (tieneValor(entryEnd1) ? entryEnd1 : (casoEsFinalizar ? entryEnd0 : undefined));
+
+    if (tieneValor(finStart) || tieneValor(finEnd)) {
+      activarSwitchRangoHorario({
+        legendRe: /rango\s+horario\s+para\s+finalizar/i,
+        labelRe: /activar\s+rango\s+de\s+fin/i,
+        toggleId: 'data.exit_window_active',
+      });
+      cy.wait(200);
+      if (tieneValor(finStart)) escribirCampoTiempo('input[name="data.exit_start_window"], input#data\\.exit_start_window', finStart);
+      if (tieneValor(finEnd)) escribirCampoTiempo('input[name="data.exit_end_window"], input#data\\.exit_end_window', finEnd);
+    }
+
+    // Activar toggle de rango de duración antes de escribir en los campos
+    if (campos['data.duration_min'] || campos['data.duration_max']) {
+      cy.get('button#data\\.duration_window_active[role="switch"]', { timeout: 10000 })
+        .then(($toggle) => {
+          if ($toggle.length && $toggle.attr('aria-checked') !== 'true') {
+            cy.wrap($toggle).scrollIntoView().click({ force: true });
+            cy.wait(300);
+          }
+        });
     }
     if (campos['data.duration_min']) {
       escribirCampoTiempo('input[name="data.duration_min"], input#data\\.duration_min', campos['data.duration_min']);
@@ -566,11 +772,31 @@ describe('JORNADAS DIARIAS - Validación completa con gestión de errores y repo
     if (campos['data.duration_max']) {
       escribirCampoTiempo('input[name="data.duration_max"], input#data\\.duration_max', campos['data.duration_max']);
     }
+
+    // Activar toggle de límite mínimo antes de escribir en el campo
     if (campos['data.daily_min_entries']) {
-      escribirCampoTiempo('input[name="data.daily_min_entries"], input#data\\.daily_min_entries', campos['data.daily_min_entries']);
+      cy.get('button#data\\.daily_min_entries_active[role="switch"]', { timeout: 10000 })
+        .then(($toggle) => {
+          if ($toggle.length && $toggle.attr('aria-checked') !== 'true') {
+            cy.wrap($toggle).scrollIntoView().click({ force: true });
+            cy.wait(300);
+          }
+        });
+      // Limpiar el campo antes de escribir (TC027 lo requiere explícitamente)
+      escribirCampoNumero('input[name="data.daily_min_entries"], input#data\\.daily_min_entries', campos['data.daily_min_entries']);
     }
+
+    // Activar toggle de límite máximo antes de escribir en el campo
     if (campos['data.daily_max_entries']) {
-      escribirCampoTiempo('input[name="data.daily_max_entries"], input#data\\.daily_max_entries', campos['data.daily_max_entries']);
+      cy.get('button#data\\.daily_max_entries_active[role="switch"]', { timeout: 10000 })
+        .then(($toggle) => {
+          if ($toggle.length && $toggle.attr('aria-checked') !== 'true') {
+            cy.wrap($toggle).scrollIntoView().click({ force: true });
+            cy.wait(300);
+          }
+        });
+      // Limpiar el campo antes de escribir (TC027 lo requiere explícitamente)
+      escribirCampoNumero('input[name="data.daily_max_entries"], input#data\\.daily_max_entries', campos['data.daily_max_entries']);
     }
     if (campos['data.session_reset_time']) {
       escribirCampoTiempo('input[name="data.session_reset_time"], input#data\\.session_reset_time', campos['data.session_reset_time']);
