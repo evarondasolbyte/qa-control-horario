@@ -502,7 +502,7 @@ describe('JORNADAS DIARIAS - Validación completa con gestión de errores y repo
         // Último recurso MUY conservador: no pulsar el primer switch del form completo, porque suele ser el de "inicio"
         // Preferimos no hacer nada antes que habilitar el switch incorrecto.
         const $sw = $form.find('[role="switch"]:visible, .fi-toggle:visible, input[type="checkbox"]:visible').first();
-        if ($sw.length) cy.log('⚠️ Campo deshabilitado pero no se encontró switch cercano; evitando pulsar un switch genérico del formulario');
+        if ($sw.length) cy.log(' Campo deshabilitado pero no se encontró switch cercano; evitando pulsar un switch genérico del formulario');
       });
     });
   }
@@ -654,8 +654,8 @@ describe('JORNADAS DIARIAS - Validación completa con gestión de errores y repo
       const keys = Object.keys(campos || {});
       const entryKeys = keys.filter(k => /data\.entry_/i.test(k));
       const exitKeys = keys.filter(k => /data\.exit_/i.test(k));
-      cy.log(`🧾 Campos (entry): ${entryKeys.join(', ') || '(ninguno)'}`);
-      cy.log(`🧾 Campos (exit): ${exitKeys.join(', ') || '(ninguno)'}`);
+      cy.log(` Campos (entry): ${entryKeys.join(', ') || '(ninguno)'}`);
+      cy.log(` Campos (exit): ${exitKeys.join(', ') || '(ninguno)'}`);
     } catch (e) {
       // noop
     }
