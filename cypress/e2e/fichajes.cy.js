@@ -1471,40 +1471,40 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
 
             // Si hay inputs visibles, intentar rellenarlos
             if (hayInputs >= 2) {
-              return cy.get(selectorInputsModal, { timeout: 8000 })
-                .filter(':visible')
-                .then(($inputs) => {
+            return cy.get(selectorInputsModal, { timeout: 8000 })
+              .filter(':visible')
+              .then(($inputs) => {
                   if ($inputs.length >= 2) {
-                    cy.wrap($inputs.eq(0))
-                      .should('be.visible')
-                      .clear({ force: true })
-                      .type(horasStr, { force: true });
-                    cy.wait(200);
+                cy.wrap($inputs.eq(0))
+                  .should('be.visible')
+                  .clear({ force: true })
+                  .type(horasStr, { force: true });
+                cy.wait(200);
 
-                    cy.wrap($inputs.eq(1))
-                      .should('be.visible')
-                      .clear({ force: true })
-                      .type(minutosStr, { force: true });
-                    cy.wait(200);
+                cy.wrap($inputs.eq(1))
+                  .should('be.visible')
+                  .clear({ force: true })
+                  .type(minutosStr, { force: true });
+                cy.wait(200);
                   }
-                })
-                .then(() => {
-                  cy.log('Pulsando botón "Aceptar" del modal de edición de hora');
-                  return cy.get('button.time-edit-btn.time-edit-btn-primary', { timeout: 8000 })
+              })
+              .then(() => {
+                cy.log('Pulsando botón "Aceptar" del modal de edición de hora');
+                return cy.get('button.time-edit-btn.time-edit-btn-primary', { timeout: 8000 })
                     .filter(':visible')
                     .first()
-                    .should('be.visible')
-                    .click({ force: true });
-                })
-                .then(() => {
-                  cy.wait(500);
-                  return cy.get('body', { timeout: 5000 }).should(($b) => {
-                    const hayInputsVisibles = $b
-                      .find('input.time-edit-field-input')
-                      .filter(':visible').length;
-                    expect(hayInputsVisibles, 'Modal de edición de hora cerrado').to.eq(0);
-                  });
+                  .should('be.visible')
+                  .click({ force: true });
+              })
+              .then(() => {
+                cy.wait(500);
+                return cy.get('body', { timeout: 5000 }).should(($b) => {
+                  const hayInputsVisibles = $b
+                    .find('input.time-edit-field-input')
+                    .filter(':visible').length;
+                  expect(hayInputsVisibles, 'Modal de edición de hora cerrado').to.eq(0);
                 });
+              });
             }
 
             // Si no hay inputs o ya están editados, buscar y hacer click en Aceptar directamente
@@ -1645,7 +1645,7 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
       .then(() => {
         return aceptarAdvertenciaSiExiste({
           accion: 'omitir'
-        });
+      });
       })
       .then(() => cy.wait(800));
 
@@ -1697,7 +1697,7 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
                   .click({ force: true });
               }
               return cy.wrap(null);
-            });
+      });
           })
 
           .then(() => cy.wait(300))
