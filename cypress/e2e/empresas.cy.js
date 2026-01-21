@@ -130,6 +130,22 @@ describe('EMPRESAS - Validación completa con gestión de errores y reporte a Ex
           password: Cypress.env('SUPERADMIN_PASSWORD') || 'novatranshorario@2025', 
           useSession: false 
         });
+        // Verificar si redirigió a fichar y navegar a Panel interno si es necesario
+        cy.url({ timeout: 15000 }).then((currentUrl) => {
+          if (currentUrl.includes('/fichar')) {
+            cy.log('Redirigido a fichajes, navegando a Panel interno...');
+            cy.get('header .account-trigger, header a.account, header .account a, header .header-account a', { timeout: 10000 })
+              .first()
+              .scrollIntoView()
+              .should('be.visible')
+              .click({ force: true });
+            cy.wait(800);
+            return cy.contains('button, a, [role="menuitem"], .dropdown-item', /Panel interno/i, { timeout: 10000 })
+              .scrollIntoView()
+              .click({ force: true });
+          }
+          return cy.wrap(null);
+        });
         cy.url({ timeout: 20000 }).should('include', DASHBOARD_PATH);
         cy.wait(2000);
 
@@ -665,16 +681,26 @@ describe('EMPRESAS - Validación completa con gestión de errores y reporte a Ex
   function reemplazarConNumeroAleatorio(valor, numeroCaso) {
     if (!valor || typeof valor !== 'string') return valor;
 
-    // EXCEPCIÓN: TC017 (duplicado) siempre usa valores fijos sin números aleatorios
-    if (numeroCaso === 17) {
-      return valor.replace(/1\+/g, '1');
+    let resultado = valor;
+
+    // Reemplazar "XXX" con 3 números aleatorios (100-999)
+    if (resultado.includes('XXX')) {
+      const numerosAleatorios3 = Math.floor(100 + Math.random() * 900); // Genera número entre 100 y 999
+      resultado = resultado.replace(/XXX/g, numerosAleatorios3.toString());
     }
 
-    // Generar número aleatorio entre 1000 y 9999
+    // EXCEPCIÓN: TC017 (duplicado) siempre usa valores fijos sin números aleatorios
+    if (numeroCaso === 17) {
+      return resultado.replace(/1\+/g, '1');
+    }
+
+    // Generar número aleatorio entre 1000 y 9999 para "1+"
     const numeroAleatorio = Math.floor(Math.random() * 9000) + 1000;
 
     // Reemplazar todos los "1+" con el número aleatorio
-    return valor.replace(/1\+/g, numeroAleatorio.toString());
+    resultado = resultado.replace(/1\+/g, numeroAleatorio.toString());
+
+    return resultado;
   }
 
   function ejecutarCrearIndividual(casoExcel) {

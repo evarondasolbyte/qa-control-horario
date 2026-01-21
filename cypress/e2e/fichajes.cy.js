@@ -5,6 +5,7 @@ describe('FICHAJES - Validación completa con gestión de errores y reporte a Ex
   const FICHAJES_URL_ABS = 'https://horario.dev.novatrans.app/fichar?testing=novatranshorario';
   const FICHAJES_PATH = '/fichar';
   const LOGIN_PATH = '/login';
+  const LOGIN_URL_ABS = 'https://horario.dev.novatrans.app/login';
 
   // Helper: Verificar y navegar a la URL correcta de fichar con testing
   function verificarUrlFichar() {
@@ -662,8 +663,7 @@ describe('FICHAJES - Validación completa con gestión de errores y reporte a Ex
         try { w.sessionStorage?.clear(); } catch (_) { }
       });
 
-      const loginUrl = FICHAJES_URL_ABS.replace('/fichar', '/login');
-      cy.visit(loginUrl, { failOnStatusCode: false });
+      cy.visit(LOGIN_URL_ABS, { failOnStatusCode: false });
       cy.url({ timeout: 15000 }).should('include', LOGIN_PATH);
       return cy.get('input#usuario', { timeout: 10000 }).should('exist');
     } else {
@@ -1002,7 +1002,7 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
 
     cy.url().then((url) => {
       if (!url.includes(LOGIN_PATH)) {
-        cy.visit(FICHAJES_URL_ABS.replace('/fichar', '/login'), { failOnStatusCode: false });
+        cy.visit(LOGIN_URL_ABS, { failOnStatusCode: false });
       }
     });
 

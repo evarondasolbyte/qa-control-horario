@@ -222,6 +222,22 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
           password: Cypress.env('SUPERADMIN_PASSWORD') || 'novatranshorario@2025', 
           useSession: false 
         });
+        // Verificar si redirigió a fichar y navegar a Panel interno si es necesario
+        cy.url({ timeout: 15000 }).then((currentUrl) => {
+          if (currentUrl.includes('/fichar')) {
+            cy.log('Redirigido a fichajes, navegando a Panel interno...');
+            cy.get('header .account-trigger, header a.account, header .account a, header .header-account a', { timeout: 10000 })
+              .first()
+              .scrollIntoView()
+              .should('be.visible')
+              .click({ force: true });
+            cy.wait(800);
+            return cy.contains('button, a, [role="menuitem"], .dropdown-item', /Panel interno/i, { timeout: 10000 })
+              .scrollIntoView()
+              .click({ force: true });
+          }
+          return cy.wrap(null);
+        });
         cy.url({ timeout: 20000 }).should('include', DASHBOARD_PATH);
         cy.wait(1500);
         cy.visit(EMPLEADOS_URL_ABS, { failOnStatusCode: false });

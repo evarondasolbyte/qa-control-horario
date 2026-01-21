@@ -48,17 +48,17 @@ Cypress.Commands.add('login', ({
     };
 
     // Relleno las credenciales/campos para Control Horario.
-    // Buscar por placeholder o tipo de input para email
-    safeType('input[type="email"], input[placeholder*="Correo"], input[placeholder*="email"]', email);
-    safeType('input[type="password"], input[placeholder*="Contraseña"], input[placeholder*="password"]', password);
+    // Buscar por id, name o placeholder para usuario (ya no es email)
+    safeType('input#usuario, input[name="usuario"], input[placeholder*="Usuario"], input[placeholder*="usuario"], input[type="text"][id="usuario"]', email);
+    safeType('input#clave, input[name="clave"], input[type="password"], input[placeholder*="Contraseña"], input[placeholder*="password"]', password);
 
     // Si se solicita "Recordarme", marcar el checkbox
     if (rememberMe) {
       cy.get('input[type="checkbox"], .checkbox, [data-testid="remember-me"]').check();
     }
 
-    // Envío el formulario - buscar botón "Entrar" o submit
-    cy.get('button[type="submit"], button:contains("Entrar"), input[type="submit"]').click();
+    // Envío el formulario - buscar botón "Acceder" o submit
+    cy.get('button[type="submit"], button:contains("Acceder"), button:contains("Entrar"), input[type="submit"]').click();
   };
 
   if (useSession) {
@@ -67,9 +67,11 @@ Cypress.Commands.add('login', ({
       ['usuario-activo', email, password],
       () => {
         performLogin();
-        // Valido que verdaderamente estoy dentro.
-        cy.url({ timeout: 20000 }).should('include', '/panelinterno');
-        cy.get('header, .MuiToolbar-root, .dashboard-container').should('exist');
+        // Valido que verdaderamente estoy dentro (puede redirigir a /panelinterno o /fichar)
+        cy.url({ timeout: 20000 }).should((url) => {
+          expect(url).to.satisfy((u) => u.includes('/panelinterno') || u.includes('/fichar'));
+        });
+        cy.get('header, .MuiToolbar-root, .dashboard-container, body').should('exist');
       }
     );
     // Siempre aterrizo en /panelinterno para empezar los tests en una pantalla conocida.

@@ -4,7 +4,7 @@ describe('PRUEBAS USUARIO SUPERVISOR - Validación completa con gestión de erro
   const archivo = 'reportes_pruebas_control_horario.xlsx';
   const BASE_URL = 'https://horario.dev.novatrans.app';
   const DASHBOARD_PATH = '/panelinterno';
-  const LOGIN_PATH = '/panelinterno/login';
+  const LOGIN_PATH = '/login';
   
   // Credenciales de usuario supervisor (desde variables de entorno)
   const SUPERVISOR_EMAIL = Cypress.env('SUPERVISOR_EMAIL') || 'supervisor@supervisor.app';
@@ -56,6 +56,22 @@ describe('PRUEBAS USUARIO SUPERVISOR - Validación completa con gestión de erro
       email: SUPERVISOR_EMAIL, 
       password: SUPERVISOR_PASSWORD, 
       useSession: false 
+    });
+    // Verificar si redirigió a fichar y navegar a Panel interno si es necesario
+    cy.url({ timeout: 15000 }).then((currentUrl) => {
+      if (currentUrl.includes('/fichar')) {
+        cy.log('Redirigido a fichajes, navegando a Panel interno...');
+        cy.get('header .account-trigger, header a.account, header .account a, header .header-account a', { timeout: 10000 })
+          .first()
+          .scrollIntoView()
+          .should('be.visible')
+          .click({ force: true });
+        cy.wait(800);
+        return cy.contains('button, a, [role="menuitem"], .dropdown-item', /Panel interno/i, { timeout: 10000 })
+          .scrollIntoView()
+          .click({ force: true });
+      }
+      return cy.wrap(null);
     });
     cy.url({ timeout: 20000 }).should('include', DASHBOARD_PATH);
     cy.wait(2000);

@@ -23,14 +23,28 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
     cy.procesarResultadosPantalla('Grupos');
   });
 
+  // Si está vacío, se ejecutan todos los casos que no estén en CASOS_PAUSADOS
+  // Ejecutar todos los casos que no estén pausados
+  const CASOS_OK = new Set();
+  const CASOS_PAUSADOS = new Set();
+
   it('Ejecutar todos los casos de Grupos desde Google Sheets', () => {
     cy.obtenerDatosExcel('Grupos').then((casosExcel) => {
       cy.log(`Cargados ${casosExcel.length} casos desde Excel para Grupos`);
 
       const prioridadFiltro = (Cypress.env('prioridad') || '').toString().toUpperCase();
-      const casosFiltrados = prioridadFiltro && prioridadFiltro !== 'TODAS'
+      let casosFiltrados = prioridadFiltro && prioridadFiltro !== 'TODAS'
         ? casosExcel.filter(c => (c.prioridad || '').toUpperCase() === prioridadFiltro)
         : casosExcel;
+
+      casosFiltrados = casosFiltrados.filter((caso) => {
+        const id = String(caso.caso || '').trim().toUpperCase();
+        if (CASOS_PAUSADOS.has(id)) return false;
+        if (CASOS_OK.size === 0) return true;
+        return CASOS_OK.has(id);
+      });
+
+      cy.log(`Casos OK a ejecutar: ${casosFiltrados.length} -> ${casosFiltrados.map(c => c.caso).join(', ')}`);
 
       let chain = cy.wrap(null);
       casosFiltrados.forEach((casoExcel, idx) => {
@@ -135,6 +149,7 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
       'asignarEmpleado': vincularEmpleado,
       'asignarJornada': asignarJornadaSemanal,
       'asignarJornadaSemanal': asignarJornadaSemanal,
+      'eliminarJornada': eliminarJornada,
       'editarAbrirFormulario': editarAbrirFormulario,
       'ejecutarEditarIndividual': ejecutarEditarIndividual,
       'editarCancelar': editarCancelar,
@@ -236,6 +251,22 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
           password: Cypress.env('SUPERADMIN_PASSWORD') || 'novatranshorario@2025', 
           useSession: false 
         });
+        // Verificar si redirigió a fichar y navegar a Panel interno si es necesario
+        cy.url({ timeout: 15000 }).then((currentUrl) => {
+          if (currentUrl.includes('/fichar')) {
+            cy.log('Redirigido a fichajes, navegando a Panel interno...');
+            cy.get('header .account-trigger, header a.account, header .account a, header .header-account a', { timeout: 10000 })
+              .first()
+              .scrollIntoView()
+              .should('be.visible')
+              .click({ force: true });
+            cy.wait(800);
+            return cy.contains('button, a, [role="menuitem"], .dropdown-item', /Panel interno/i, { timeout: 10000 })
+              .scrollIntoView()
+              .click({ force: true });
+          }
+          return cy.wrap(null);
+        });
         cy.url({ timeout: 20000 }).should('include', DASHBOARD_PATH);
         cy.wait(1500);
 
@@ -310,16 +341,26 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
   function reemplazarConNumeroAleatorio(valor, numeroCaso) {
     if (!valor || typeof valor !== 'string') return valor;
 
-    // EXCEPCIÓN: TC017 (duplicado) siempre usa valores fijos sin números aleatorios
-    if (numeroCaso === 17) {
-      return valor.replace(/1\+/g, '1');
+    let resultado = valor;
+
+    // Reemplazar "XXX" con 3 números aleatorios (100-999)
+    if (resultado.includes('XXX')) {
+      const numerosAleatorios3 = Math.floor(100 + Math.random() * 900); // Genera número entre 100 y 999
+      resultado = resultado.replace(/XXX/g, numerosAleatorios3.toString());
     }
 
-    // Generar número aleatorio entre 1000 y 9999
+    // EXCEPCIÓN: TC017 (duplicado) siempre usa valores fijos sin números aleatorios
+    if (numeroCaso === 17) {
+      return resultado.replace(/1\+/g, '1');
+    }
+
+    // Generar número aleatorio entre 1000 y 9999 para "1+"
     const numeroAleatorio = Math.floor(Math.random() * 9000) + 1000;
 
     // Reemplazar todos los "1+" con el número aleatorio
-    return valor.replace(/1\+/g, numeroAleatorio.toString());
+    resultado = resultado.replace(/1\+/g, numeroAleatorio.toString());
+
+    return resultado;
   }
 
   // === Funciones reutilizadas ===
@@ -587,60 +628,21 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
         cy.wait(2000);
         
         // Los campos usan mountedTableActionsData.0 en lugar de data
-        const selectorNombre = 'input[name="mountedTableActionsData.0.name"], input#mountedTableActionsData\\.0\\.name, input[wire\\:model="mountedTableActionsData.0.name"]';
-        const selectorApellidos = 'input[name="mountedTableActionsData.0.surname"], input#mountedTableActionsData\\.0\\.surname, input[wire\\:model="mountedTableActionsData.0.surname"]';
-        const selectorEmail = 'input[name="mountedTableActionsData.0.email"], input#mountedTableActionsData\\.0\\.email, input[wire\\:model="mountedTableActionsData.0.email"]';
-
-        // Intentar encontrar los campos de forma más flexible
-        // Primero verificar si hay un modal o contenedor visible
-        cy.get('body').then(($body) => {
-          // Buscar si hay un modal visible
-          const $modal = $body.find('.fi-modal:visible, [role="dialog"]:visible, .modal:visible');
-          if ($modal.length > 0) {
-            cy.wrap($modal).as('formContainer');
-          } else {
-            // Si no hay modal, buscar en el body directamente
-            cy.get('body').as('formContainer');
-          }
-        });
+        const selectorNombre = 'input[name="mountedTableActionsData.0.name"], input#mountedTableActionsData\\.0\\.name, input[wire\\:model="mountedTableActionsData.0.name"], input[placeholder*="nombre" i], input[placeholder*="name" i]';
+        const selectorApellidos = 'input[name="mountedTableActionsData.0.surname"], input#mountedTableActionsData\\.0\\.surname, input[wire\\:model="mountedTableActionsData.0.surname"], input[placeholder*="apellidos" i], input[placeholder*="surname" i]';
+        const selectorEmail = 'input[name="mountedTableActionsData.0.email"], input#mountedTableActionsData\\.0\\.email, input[wire\\:model="mountedTableActionsData.0.email"], input[type="email"][placeholder*="email" i]';
 
         // Hacer scroll nuevamente para asegurar que los campos estén visibles
         cy.scrollTo('bottom', { duration: 300 });
         cy.wait(1000);
 
-        // Buscar los campos dentro del contenedor o en el body
-        cy.get('@formContainer').then(() => {
-          // Esperar a que los campos aparezcan con múltiples intentos
-          cy.get('body').then(($body) => {
-            // Intentar encontrar los campos con diferentes estrategias
-            let found = false;
-            const selectors = [
-              'input[name="mountedTableActionsData.0.name"]',
-              'input#mountedTableActionsData\\.0\\.name',
-              'input[wire\\:model="mountedTableActionsData.0.name"]',
-              'input[placeholder*="nombre" i]',
-              'input[placeholder*="name" i]'
-            ];
-
-            for (const sel of selectors) {
-              if ($body.find(sel).length > 0) {
-                found = true;
-                break;
-              }
-            }
-
-            if (!found) {
-              // Si no se encuentran, esperar un poco más y hacer scroll
-              cy.wait(2000);
-              cy.scrollTo('bottom', { duration: 300 });
-            }
-          });
-        });
-
         // Esperar a que los campos aparezcan - usar should('exist') primero y luego 'be.visible'
         cy.get(selectorNombre, { timeout: 25000 })
           .should('exist')
-          .should('be.visible');
+          .should('be.visible')
+          .scrollIntoView({ duration: 300 });
+        
+        cy.wait(300);
         
         cy.get(selectorApellidos, { timeout: 25000 })
           .should('exist')
@@ -650,14 +652,14 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
           .should('exist')
           .should('be.visible');
 
-        // Hacer scroll al primer campo para asegurar que estén en el viewport
-        cy.get(selectorNombre).scrollIntoView({ duration: 300 });
-        cy.wait(300);
-
         // Ahora rellenar los campos
         escribirCampo(selectorNombre, nombreEmpleado);
+        cy.wait(300);
         escribirCampo(selectorApellidos, apellidosEmpleado);
+        cy.wait(300);
         escribirCampo(selectorEmail, emailEmpleado);
+        cy.wait(300);
+        
         return encontrarBotonAlFinal('Crear');
       })
       .then(() => esperarToastExito())
@@ -732,8 +734,510 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
       .then(() => esperarToastExito());
   }
 
+  function eliminarJornada(casoExcel) {
+    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
+    
+    const jornada = obtenerDatoPorEtiqueta(casoExcel, 'jornada') ||
+      obtenerDatoEnTexto(casoExcel, 'Jornada') ||
+      casoExcel.dato_1 ||
+      '';
+    
+    return editarAbrirFormulario(casoExcel)
+      .then(() => {
+        // Buscar y hacer clic en "Jornadas Semanales Asignadas"
+        cy.contains('button', /^\s*Jornadas?\s+Semanales?\s+Asignadas?\s*$/i, { timeout: 10000 })
+          .filter(':visible')
+          .first()
+          .scrollIntoView()
+          .click({ force: true });
+        
+        // Esperar a que la pestaña se active completamente y el contenido se cargue
+        cy.wait(800);
+        cy.get('body').should(($body) => {
+          // Verificar que la pestaña está activa o que el contenido de jornadas está visible
+          const tieneContenidoJornadas = $body.text().toLowerCase().includes('jornadas semanales asignadas') ||
+                                         $body.find('[class*="fi-ta"], table, .fi-resource-relation-manager').length > 0;
+          if (!tieneContenidoJornadas) {
+            throw new Error('El contenido de jornadas semanales asignadas aún no está visible');
+          }
+        });
+        cy.wait(500); // Espera adicional para asegurar que todo está cargado
+        
+        // Verificar si hay jornadas asignadas buscando botones de "Borrar" específicos de jornadas
+        return cy.get('body').then(($body) => {
+          // Buscar botones de eliminar jornada específicamente dentro de la tabla
+          // Buscar botones con wire:click que contenga 'mountTableAction('delete'
+          const $botonesEliminarJornada = $body.find('button[wire\\:click*="mountTableAction(\'delete\'').filter(':visible');
+          
+          // También buscar por texto "Borrar" dentro de celdas de acciones de la tabla
+          let hayJornadasAsignadas = $botonesEliminarJornada.length > 0;
+          
+          if (!hayJornadasAsignadas) {
+            // Búsqueda alternativa: buscar botones "Borrar" dentro de .fi-ta-actions-cell
+            const $botonesBorrar = $body.find('.fi-ta-actions-cell button:visible, .fi-ta-actions-cell a:visible')
+              .filter((i, el) => {
+                const $el = Cypress.$(el);
+                const texto = $el.text().toLowerCase().trim();
+                // Buscar botones que digan "borrar" o "eliminar" y estén en celdas de acciones
+                if (!/borrar|eliminar|delete/i.test(texto)) return false;
+                // Excluir botones que mencionen "grupo"
+                if (texto.includes('grupo') || texto.includes('group')) return false;
+                // Verificar que esté en una celda de acciones de la tabla
+                const $celdaAcciones = $el.closest('.fi-ta-actions-cell');
+                if ($celdaAcciones.length === 0) return false;
+                // Verificar que esté dentro de una fila de datos (no header)
+                const $fila = $celdaAcciones.closest('.fi-ta-row, tbody tr');
+                if ($fila.length === 0 || $fila.hasClass('fi-ta-header-row') || $fila.closest('thead').length > 0) {
+                  return false;
+                }
+                return true;
+              });
+            
+            hayJornadasAsignadas = $botonesBorrar.length > 0;
+          }
+          
+          // Si NO hay jornadas asignadas, primero asignar una
+          const noHayJornadas = !hayJornadasAsignadas;
+          
+          if (noHayJornadas) {
+            cy.log('TC040: No hay jornadas asignadas, asignando una jornada primero...');
+            
+            // Abrir modal para asignar jornada
+            return cy.contains('button', /^\s*[\+\-]?\s*Asignar\s+Jornada\s+Semanal\s*$/i, { timeout: 10000 })
+              .filter(':visible')
+              .first()
+              .scrollIntoView()
+              .click({ force: true })
+              .then(() => {
+                cy.wait(1000); // Aumentar espera inicial para que el modal se abra completamente
+                return cy.get('body').then(($body2) => {
+                  if ($body2.find('.fi-modal:visible, [role="dialog"]:visible').length === 0) {
+                    // Reintentar si no se abrió
+                    cy.log('TC040: El modal no se abrió, reintentando...');
+                    return cy.contains('button', /^\s*[\+\-]?\s*Asignar\s+Jornada\s+Semanal\s*$/i, { timeout: 10000 })
+                      .filter(':visible')
+                      .first()
+                      .scrollIntoView()
+                      .click({ force: true })
+                      .then(() => cy.wait(1000)); // Aumentar espera también en el reintento
+                  }
+                  return cy.wrap(null);
+                });
+              })
+              .then(() => {
+                // Seleccionar jornada en el modal usando la misma lógica que TC039
+                cy.get('.fi-modal:visible, [role="dialog"]:visible', { timeout: 15000 })
+                  .as('modalJornada')
+                  .should('be.visible');
+                
+                // Esperar a que el modal esté completamente cargado antes de interactuar
+                cy.wait(1000);
+                cy.get('@modalJornada').within(() => {
+                  // Verificar que el campo de jornada semanal esté presente y cargado
+                  cy.contains('label, span, div', /Jornada\s+Semanal/i, { timeout: 10000 }).should('be.visible');
+                });
+                cy.wait(500); // Espera adicional para asegurar que el dropdown esté listo
+                
+                // TC040: seleccionar la primera jornada disponible (usando la misma lógica que asignarJornadaSemanal)
+                cy.log('TC040: Seleccionando la primera jornada semanal disponible...');
+                // Seleccionar jornada vacía (string vacío) hará que seleccione la primera disponible
+                return seleccionarJornadaEnModal('@modalJornada', '');
+              })
+              .then(() => {
+                // Esperar a que la selección se complete y el botón Crear esté habilitado
+                cy.wait(800);
+                cy.log('TC040: Verificando que la jornada se haya seleccionado correctamente...');
+                
+                // Verificar que el modal sigue abierto y que se puede hacer clic en Crear
+                cy.get('@modalJornada').should('be.visible').within(() => {
+                  // Verificar que el botón Crear existe y está visible
+                  cy.contains('button, a', /^\s*Crear\s*$/i, { timeout: 10000 })
+                    .should('be.visible')
+                    .should('not.be.disabled');
+                });
+                
+                cy.wait(300);
+                
+                // Crear la jornada asignada
+                cy.log('TC040: Haciendo clic en el botón Crear...');
+                cy.get('@modalJornada').within(() => {
+                  cy.contains('button, a', /^\s*Crear\s*$/i, { timeout: 10000 })
+                    .scrollIntoView()
+                    .should('be.visible')
+                    .should('not.be.disabled')
+                    .click({ force: true });
+                });
+                cy.wait(1500); // Esperar más tiempo a que aparezca el toast, se guarde y se cierre el modal
+                
+                // Esperar a que el modal se cierre o aparezca el toast de éxito
+                cy.get('body', { timeout: 5000 }).should(($body) => {
+                  const modalVisible = $body.find('.fi-modal:visible, [role="dialog"]:visible').length > 0;
+                  const tieneToast = $body.find('[class*="toast"], [class*="notification"], [class*="alert"]').length > 0;
+                  // El modal debería cerrarse o aparecer un toast
+                  if (modalVisible && !tieneToast) {
+                    // Si el modal sigue abierto sin toast, puede que haya un error
+                    cy.wait(1000);
+                  }
+                });
+                
+                // Detectar mensaje de "ya está asignada" o verificar si el modal sigue abierto
+                return cy.get('body').then(($bodyToast) => {
+                  const textoToast = $bodyToast.text().toLowerCase();
+                  const hayMensajeError = /ya\s+est[áa]\s+asignada\s+a\s+este\s+grupo|no\s+se\s+puede\s+asignar/i.test(textoToast);
+                  const modalSigueAbierto = $bodyToast.find('.fi-modal:visible, [role="dialog"]:visible').length > 0;
+                  
+                  if (hayMensajeError || modalSigueAbierto) {
+                    cy.log('TC040: La jornada ya estaba asignada o hubo error, cerrar modal con Cancelar...');
+                    // Cerrar modal específicamente con el botón "Cancelar"
+                    return cy.get('.fi-modal:visible, [role="dialog"]:visible', { timeout: 5000 })
+                      .should('exist')
+                      .within(() => {
+                        cy.contains('button, a', /^\s*Cancelar\s*$/i, { timeout: 10000 })
+                          .scrollIntoView()
+                          .click({ force: true });
+                      })
+                      .then(() => {
+                        cy.wait(800); // Esperar a que el modal se cierre completamente
+                        return cy.wrap('toast-ya-asignada');
+                      });
+                  }
+                  return esperarToastExito().then(() => cy.wrap('jornada-creada'));
+                });
+              })
+              .then((resultado) => {
+                cy.wait(1000); // Esperar a que la tabla se renderice después de crear la jornada
+                const irAEliminarExistente = resultado === 'toast-ya-asignada';
+                
+                // Buscar botón de eliminar jornada SOLO dentro de la tabla de jornadas asignadas
+                // IMPORTANTE: NO buscar fuera del contexto del formulario grande
+                return cy.contains('button, .fi-tabs-item', /Jornadas?\s+Semanales?\s+Asignadas?/i, { timeout: 10000 })
+                  .should('be.visible')
+                  .then(() => {
+                    // Esperar un poco más para que la tabla se renderice
+                    cy.wait(500);
+                    // Asegurarse de que estamos en el contexto de la tabla de jornadas
+                    return cy.get('body').then(($body3) => {
+                      // Primero verificar si hay mensaje de "No hay jornadas asignadas"
+                      const hayMensajeSinJornadas = $body3.text().toLowerCase().includes('no hay jornadas semanales asignadas');
+                      
+                      if (hayMensajeSinJornadas && !irAEliminarExistente) {
+                        cy.log('TC040: No se encontraron jornadas asignadas después de crear. Puede que no se haya guardado correctamente.');
+                        // Si acabamos de crear una jornada pero no aparece, esperar un poco más y recargar
+                        cy.wait(1000);
+                        cy.reload();
+                        cy.wait(2000);
+                        // Volver a buscar después de recargar
+                        return cy.get('body').then(($body4) => {
+                          const $seccionJornadas = $body4.find('.fi-ta-table:visible, table:visible')
+                            .filter((i, el) => {
+                              const $tabla = Cypress.$(el);
+                              const textoTabla = $tabla.text().toLowerCase();
+                              return textoTabla.includes('jornada semanal') || $tabla.closest('[id*="relation"], .fi-resource-relation-manager, [class*="relation"]').length > 0;
+                            })
+                            .first();
+                          
+                          if ($seccionJornadas.length === 0) {
+                            cy.log('TC040: Aún no hay tabla después de recargar. Es posible que no haya jornadas asignadas.');
+                            throw new Error('No se encontró la tabla de jornadas semanales asignadas después de intentar crear una jornada');
+                          }
+                          return cy.wrap($seccionJornadas);
+                        });
+                      }
+                      
+                      // Buscar primero la sección de "Jornadas Semanales Asignadas"
+                      const $seccionJornadas = $body3.find('.fi-ta-table:visible, table:visible')
+                        .filter((i, el) => {
+                          const $tabla = Cypress.$(el);
+                          // Verificar que la tabla contiene texto de jornada semanal o está dentro del contexto correcto
+                          const textoTabla = $tabla.text().toLowerCase();
+                          return textoTabla.includes('jornada semanal') || $tabla.closest('[id*="relation"], .fi-resource-relation-manager, [class*="relation"]').length > 0;
+                        })
+                        .first();
+                      
+                      if ($seccionJornadas.length === 0) {
+                        // Si no hay tabla, buscar directamente los botones de eliminar en la página
+                        cy.log('TC040: No se encontró tabla, buscando botones de eliminar directamente...');
+                        const $botonesEliminarDirectos = $body3.find('button[wire\\:click*="mountTableAction(\'delete\'').filter(':visible');
+                        if ($botonesEliminarDirectos.length === 0) {
+                          throw new Error('No se encontró la tabla de jornadas semanales asignadas ni botones de eliminar');
+                        }
+                        // Si encontramos botones, continuar con ellos
+                        return cy.wrap($body3);
+                      }
+                      
+                      return cy.wrap($seccionJornadas);
+                    });
+                  })
+                  .then(($seccionJornadas) => {
+                    // Continuar con la búsqueda del botón de eliminar
+                    return cy.get('body').then(($body3) => {
+                      let $botonEliminarJornada;
+                      
+                      // Si recibimos el body directamente (caso sin tabla), buscar botones directamente
+                      if ($seccionJornadas.is('body')) {
+                        // Buscar botones de eliminar directamente en el body
+                        $botonEliminarJornada = $body3.find('button[wire\\:click*="mountTableAction"][wire\\:click*="delete"]:visible').first();
+                      } else {
+                        // Buscar botón de eliminar DENTRO de esta tabla específica
+                        $botonEliminarJornada = $seccionJornadas.find('button[wire\\:click*="mountTableAction"][wire\\:click*="delete"]:visible').first();
+                      }
+                      
+                      if ($botonEliminarJornada.length === 0) {
+                        // Buscar por clase .fi-ta-actions-cell dentro de la tabla o en el body
+                        const $contenedor = $seccionJornadas.is('body') ? $body3 : $seccionJornadas;
+                        $botonEliminarJornada = $contenedor.find('.fi-ta-actions-cell button:visible, .fi-ta-actions-cell a:visible')
+                          .filter((i, el) => {
+                            const $el = Cypress.$(el);
+                            const texto = $el.text().toLowerCase().trim();
+                            const tieneTextoBorrar = /borrar|eliminar|delete/i.test(texto);
+                            const tieneClaseDanger = $el.hasClass('fi-color-danger') || $el.find('.fi-color-danger').length > 0;
+                            
+                            if (!tieneTextoBorrar && !tieneClaseDanger) return false;
+                            
+                            // CRÍTICO: Excluir explícitamente botones que mencionen "grupo"
+                            if (texto.includes('grupo') || texto.includes('group')) return false;
+                            
+                            // Verificar que esté dentro de una fila de datos de la tabla (no header)
+                            const $fila = $el.closest('.fi-ta-row, tbody tr');
+                            if ($fila.length === 0 || $fila.hasClass('fi-ta-header-row') || $fila.closest('thead').length > 0) {
+                              return false;
+                            }
+                            
+                            // Asegurarse de que está dentro de la tabla (no en el formulario grande)
+                            // El botón debe estar dentro de .fi-ta-actions-cell que está dentro de la tabla
+                            const $celdaAcciones = $el.closest('.fi-ta-actions-cell');
+                            if ($celdaAcciones.length === 0) return false;
+                            
+                            // Verificar que la celda de acciones está dentro de una fila de la tabla
+                            const $filaDeCelda = $celdaAcciones.closest('.fi-ta-row, tbody tr');
+                            if ($filaDeCelda.length === 0) return false;
+                            
+                            // Asegurarse de que NO está en el formulario grande (fuera de la sección de jornadas)
+                            // El botón debe estar dentro del contexto de la tabla de jornadas asignadas
+                            if ($el.closest('[class*="fi-form-actions"], .fi-form-actions, button[type="submit"]').length > 0) {
+                              // Si está cerca de botones de formulario principal, no es el correcto
+                              const $botonCerca = $el.siblings('button[type="submit"], .fi-btn[type="submit"]');
+                              if ($botonCerca.length > 0) {
+                                return false; // Está en el formulario grande, no en la tabla
+                              }
+                            }
+                            
+                            return true;
+                          })
+                          .first();
+                      }
+                      
+                      if (!$botonEliminarJornada || $botonEliminarJornada.length === 0) {
+                        cy.log('TC040: No se encontró botón de eliminar jornada después de intentar asignar');
+                        throw new Error('No se encontró botón de eliminar jornada después de intentar asignar');
+                      }
+                      
+                      if ($botonEliminarJornada.length > 0) {
+                    cy.log(irAEliminarExistente ? 'TC040: Eliminando la jornada existente (ya estaba asignada)...' : 'TC040: Eliminando la jornada recién creada...');
+                    cy.wrap($botonEliminarJornada)
+                      .scrollIntoView()
+                      .should('be.visible')
+                      .click({ force: true });
+                    
+                    cy.wait(500);
+                    
+                    // Verificar si aparece un modal de confirmación o aviso
+                    return cy.get('body').then(($body4) => {
+                      if ($body4.find('.fi-modal:visible, [role="dialog"]:visible').length > 0) {
+                        cy.get('.fi-modal:visible, [role="dialog"]:visible', { timeout: 10000 })
+                          .should('be.visible')
+                          .then(($modal) => {
+                            const textoModal = $modal.text().toLowerCase();
+                            if (/incurridos|no.*eliminar|no.*borrar/i.test(textoModal)) {
+                              cy.log('TC040: Aviso - La jornada no se puede eliminar porque tiene incurridos');
+                              cy.contains('button, a', /Aceptar|Cerrar|OK|Entendido/i, { timeout: 10000 })
+                                .first()
+                                .click({ force: true });
+                            } else {
+                              // Es un modal de confirmación, confirmar eliminación con el botón "Borrar"
+                              cy.log('TC040: Confirmando eliminación de jornada semanal...');
+                              cy.get('.fi-modal:visible, [role="dialog"]:visible').within(() => {
+                                cy.contains('button, a', /^\s*Borrar\s*$/i, { timeout: 10000 })
+                                  .should('be.visible')
+                                  .scrollIntoView()
+                                  .click({ force: true });
+                              });
+                            }
+                          });
+                      }
+                      return cy.wrap(null);
+                    });
+                  } else {
+                    cy.log('TC040: No se encontró botón de eliminar jornada después de intentar asignar');
+                    throw new Error('No se encontró botón de eliminar jornada después de intentar asignar');
+                  }
+                });
+              });
+            });
+          } else {
+            // Si ya hay jornadas, eliminar directamente (NO crear otra)
+            cy.log('TC040: Ya hay jornadas asignadas, eliminando jornada directamente (sin crear otra)...');
+            
+            // Buscar el botón de eliminar jornada SOLO dentro de la tabla de jornadas asignadas
+            // IMPORTANTE: NO buscar fuera del contexto del formulario grande
+            return cy.contains('button, .fi-tabs-item', /Jornadas?\s+Semanales?\s+Asignadas?/i, { timeout: 10000 })
+              .should('be.visible')
+              .then(() => {
+                return cy.get('body').then(($body2) => {
+                  // Buscar primero la sección de "Jornadas Semanales Asignadas"
+                  const $seccionJornadas = $body2.find('.fi-ta-table:visible, table:visible')
+                    .filter((i, el) => {
+                      const $tabla = Cypress.$(el);
+                      // Verificar que la tabla contiene texto de jornada semanal o está dentro del contexto correcto
+                      const textoTabla = $tabla.text().toLowerCase();
+                      return textoTabla.includes('jornada semanal') || $tabla.closest('[id*="relation"], .fi-resource-relation-manager, [class*="relation"]').length > 0;
+                    })
+                    .first();
+                  
+                  if ($seccionJornadas.length === 0) {
+                    throw new Error('No se encontró la tabla de jornadas semanales asignadas');
+                  }
+                  
+                  // Buscar botón de eliminar DENTRO de esta tabla específica
+                  let $botonEliminarJornada = $seccionJornadas.find('button[wire\\:click*="mountTableAction"][wire\\:click*="delete"]:visible').first();
+                  
+                  if ($botonEliminarJornada.length === 0) {
+                    // Buscar por clase .fi-ta-actions-cell dentro de la tabla
+                    $botonEliminarJornada = $seccionJornadas.find('.fi-ta-actions-cell button:visible, .fi-ta-actions-cell a:visible')
+                      .filter((i, el) => {
+                        const $el = Cypress.$(el);
+                        const texto = $el.text().toLowerCase().trim();
+                        const tieneTextoBorrar = /borrar|eliminar|delete/i.test(texto);
+                        const tieneClaseDanger = $el.hasClass('fi-color-danger') || $el.find('.fi-color-danger').length > 0;
+                        
+                        if (!tieneTextoBorrar && !tieneClaseDanger) return false;
+                        
+                        // CRÍTICO: Excluir explícitamente botones que mencionen "grupo"
+                        if (texto.includes('grupo') || texto.includes('group')) return false;
+                        
+                        // Verificar que esté dentro de una fila de datos de la tabla (no header)
+                        const $fila = $el.closest('.fi-ta-row, tbody tr');
+                        if ($fila.length === 0 || $fila.hasClass('fi-ta-header-row') || $fila.closest('thead').length > 0) {
+                          return false;
+                        }
+                        
+                        // Asegurarse de que está dentro de la tabla (no en el formulario grande)
+                        const $celdaAcciones = $el.closest('.fi-ta-actions-cell');
+                        if ($celdaAcciones.length === 0) return false;
+                        
+                        // Verificar que la celda de acciones está dentro de una fila de la tabla
+                        const $filaDeCelda = $celdaAcciones.closest('.fi-ta-row, tbody tr');
+                        if ($filaDeCelda.length === 0) return false;
+                        
+                        // Asegurarse de que NO está en el formulario grande
+                        if ($el.closest('[class*="fi-form-actions"], .fi-form-actions, button[type="submit"]').length > 0) {
+                          const $botonCerca = $el.siblings('button[type="submit"], .fi-btn[type="submit"]');
+                          if ($botonCerca.length > 0) {
+                            return false; // Está en el formulario grande, no en la tabla
+                          }
+                        }
+                        
+                        return true;
+                      })
+                      .first();
+                  }
+                  
+                  if (!$botonEliminarJornada || $botonEliminarJornada.length === 0) {
+                    cy.log('TC040: No se encontró botón de eliminar jornada en la tabla');
+                    throw new Error('No se encontró botón de eliminar jornada en la tabla');
+                  }
+                  
+                  cy.log('TC040: Botón de eliminar jornada encontrado, procediendo a eliminar...');
+                  
+                  cy.wrap($botonEliminarJornada)
+                    .scrollIntoView()
+                    .should('be.visible')
+                    .click({ force: true });
+                  
+                  cy.wait(500);
+                  
+                  // Verificar si aparece un modal de confirmación o aviso
+                  return cy.get('body').then(($body3) => {
+                    if ($body3.find('.fi-modal:visible, [role="dialog"]:visible').length > 0) {
+                      cy.get('.fi-modal:visible, [role="dialog"]:visible', { timeout: 10000 })
+                        .should('be.visible')
+                        .then(($modal) => {
+                          const textoModal = $modal.text().toLowerCase();
+                          // Si el modal contiene "incurridos" o similar, es un aviso
+                          if (/incurridos|no.*eliminar|no.*borrar/i.test(textoModal)) {
+                            cy.log('TC040: Aviso - La jornada no se puede eliminar porque tiene incurridos');
+                            // Cerrar el modal de aviso
+                            cy.contains('button, a', /Aceptar|Cerrar|OK|Entendido/i, { timeout: 10000 })
+                              .first()
+                              .click({ force: true });
+                          } else {
+                            // Es un modal de confirmación, confirmar eliminación con el botón "Borrar"
+                            cy.log('TC040: Confirmando eliminación de jornada semanal...');
+                            // Buscar específicamente el botón "Borrar" en el modal
+                            cy.get('.fi-modal:visible, [role="dialog"]:visible').within(() => {
+                              cy.contains('button, a', /^\s*Borrar\s*$/i, { timeout: 10000 })
+                                .should('be.visible')
+                                .scrollIntoView()
+                                .click({ force: true });
+                            });
+                          }
+                        });
+                    }
+                    return cy.wrap(null);
+                  });
+                });
+              });
+          }
+        });
+      })
+      .then(() => {
+        // No guardar el grupo; solo asegurar que el flujo finalizó
+        cy.wait(500);
+        return cy.wrap(null);
+      });
+  }
+
   function editarAbrirFormulario(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
+    
+    // Para TC040: buscar un grupo con Empresa "SuperAdmin Company"
+    const casoId = String(casoExcel.caso || '').toUpperCase();
+    if (casoId === 'TC040') {
+      // Primero intentar filtrar por empresa si es necesario, o buscar directamente en la tabla
+      return cy.get('body').then(($body) => {
+        // Buscar en la tabla un grupo que tenga "SuperAdmin Company" en su fila
+        const $filas = $body.find('.fi-ta-row:visible, tr:visible');
+        let $filaEncontrada = null;
+        
+        $filas.each((i, fila) => {
+          const textoFila = Cypress.$(fila).text().toLowerCase();
+          if (textoFila.includes('superadmin company')) {
+            $filaEncontrada = Cypress.$(fila);
+            return false; // break
+          }
+        });
+        
+        if ($filaEncontrada && $filaEncontrada.length > 0) {
+          cy.wrap($filaEncontrada)
+            .scrollIntoView()
+            .within(() => {
+              cy.contains('button, a', /Editar/i).click({ force: true });
+            });
+        } else {
+          // Si no se encuentra, usar la primera fila como fallback
+          cy.log('TC040: No se encontró grupo con Empresa "SuperAdmin Company", usando primera fila');
+          cy.get('.fi-ta-table, table').scrollTo('right', { ensureScrollable: false });
+          cy.wait(400);
+          cy.get('.fi-ta-row:visible').first().within(() => {
+            cy.contains('button, a', /Editar/i).click({ force: true });
+          });
+        }
+        
+        return cy.url({ timeout: 10000 }).should('include', GRUPOS_PATH);
+      });
+    }
+    
+    // Para otros casos, usar el comportamiento original
     cy.get('.fi-ta-table, table').scrollTo('right', { ensureScrollable: false });
     cy.wait(400);
     cy.get('.fi-ta-row:visible').first().within(() => {
@@ -939,6 +1443,10 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
       .as('panel')
       .should('be.visible');
 
+    // Hacer scroll hacia arriba para asegurar que el panel esté completamente visible
+    cy.scrollTo('top', { duration: 300 });
+    cy.wait(300);
+
     // 2) Localizar el CHOICES de DEPARTAMENTO (department_id)
     cy.get('@panel').then($panel => {
       const $panelJq = Cypress.$($panel);
@@ -978,6 +1486,10 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
       .find('.choices__list--dropdown.is-active', { timeout: 10000 })
       .should('be.visible');
 
+    // Hacer scroll hacia arriba para asegurar que las opciones del dropdown sean visibles
+    cy.scrollTo('top', { duration: 300 });
+    cy.wait(300);
+
     // Si hay "Cargando..." esperar
     cy.get('body').then($b => {
       if ($b.text().includes('Cargando...')) {
@@ -995,6 +1507,9 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
             .clear({ force: true })
             .type(depto, { force: true, delay: 10 });
         });
+        // Después de escribir, hacer scroll hacia arriba nuevamente
+        cy.scrollTo('top', { duration: 300 });
+        cy.wait(300);
       }
     });
 
@@ -1003,6 +1518,10 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
       .find('.choices__list--dropdown.is-active', { timeout: 10000 })
       .should('be.visible')
       .within(() => {
+        // Hacer scroll hacia arriba antes de buscar la opción
+        cy.scrollTo('top', { duration: 300 });
+        cy.wait(300);
+        
         cy.contains('.choices__item--choice', new RegExp(`^${escaparRegex(depto)}$`, 'i'), { timeout: 10000 })
           .scrollIntoView()
           .click({ force: true });
@@ -1320,24 +1839,83 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
               cy.wait(200);
             }
 
-            const dropdown = $body.find('.choices__list--dropdown.is-active:visible').last();
-            if (dropdown.length) {
-              const selectorOpcion = '.choices__item--choice:visible';
-              if (termino) {
-                cy.wrap(dropdown).contains(selectorOpcion, new RegExp(termino, 'i'), { timeout: 10000 }).click({ force: true });
+            // Esperar a que el dropdown esté visible y activo, y que termine de cargar
+            cy.wait(300);
+            return cy.get('body').then(($body2) => {
+              const dropdown = $body2.find('.choices__list--dropdown.is-active:visible').last();
+              if (dropdown.length) {
+                // Esperar a que desaparezca "Cargando..." y que las opciones estén disponibles
+                cy.wrap(dropdown).should('be.visible');
+                cy.log(`TC040: Esperando a que las opciones terminen de cargar...`);
+                
+                // Esperar a que no haya texto "Cargando..." y que haya opciones disponibles
+                cy.wait(500);
+                return cy.get('body', { timeout: 15000 }).should(($body3) => {
+                  const $dropdownActivo = $body3.find('.choices__list--dropdown.is-active:visible').last();
+                  const textoDropdown = $dropdownActivo.text().toLowerCase();
+                  const tieneCargando = /cargando|loading/i.test(textoDropdown);
+                  const tieneOpciones = $dropdownActivo.find('.choices__item--choice:visible').length > 0;
+                  
+                  if (tieneCargando && !tieneOpciones) {
+                    throw new Error('El dropdown aún está cargando opciones');
+                  }
+                }).then(() => {
+                  return cy.get('body').then(($body4) => {
+                    const $dropdownFinal = $body4.find('.choices__list--dropdown.is-active:visible').last();
+                    const selectorOpcion = '.choices__item--choice:visible';
+                    cy.log(`TC040: Buscando opción en dropdown Choices. Término: "${termino}"`);
+                    
+                    if (termino) {
+                      return cy.wrap($dropdownFinal).contains(selectorOpcion, new RegExp(termino, 'i'), { timeout: 10000 })
+                        .should('be.visible')
+                        .scrollIntoView()
+                        .click({ force: true });
+                    } else {
+                      // Si no hay término, seleccionar la primera opción disponible
+                      cy.log('TC040: Seleccionando la primera opción disponible del dropdown');
+                      return cy.wrap($dropdownFinal).find(selectorOpcion)
+                        .should('have.length.at.least', 1)
+                        .first()
+                        .should('be.visible')
+                        .scrollIntoView()
+                        .click({ force: true });
+                    }
+                  });
+                });
               } else {
-                cy.wrap(dropdown).find(selectorOpcion).first().click({ force: true });
+                // Fallback: buscar opciones genéricas
+                cy.log('TC040: Dropdown Choices no encontrado, buscando opciones genéricas');
+                const selectorGenerico = '[role="option"]:visible, .fi-dropdown-panel:visible [data-select-option]:visible';
+                if (termino) {
+                  return cy.contains(selectorGenerico, new RegExp(termino, 'i'), { timeout: 10000 })
+                    .should('be.visible')
+                    .scrollIntoView()
+                    .click({ force: true });
+                } else {
+                  return cy.get(selectorGenerico, { timeout: 10000 })
+                    .should('have.length.at.least', 1)
+                    .first()
+                    .should('be.visible')
+                    .scrollIntoView()
+                    .click({ force: true });
+                }
               }
-            } else {
-              const selectorGenerico = '[role="option"]:visible, .fi-dropdown-panel:visible [data-select-option]:visible';
-              if (termino) {
-                cy.contains(selectorGenerico, new RegExp(termino, 'i'), { timeout: 10000 }).click({ force: true });
-              } else {
-                cy.get(selectorGenerico, { timeout: 10000 }).first().click({ force: true });
-              }
+            });
+          });
+        }).then(() => {
+          // Esperar más tiempo después de seleccionar para asegurar que la selección se complete
+          cy.wait(800);
+          // Verificar que la opción se haya seleccionado correctamente
+          cy.get('body').then(($body) => {
+            // Verificar que el dropdown se cerró (indicando que se seleccionó algo)
+            const dropdownAbierto = $body.find('.choices__list--dropdown.is-active:visible').length > 0;
+            if (dropdownAbierto) {
+              cy.log('TC040: El dropdown aún está abierto, esperando un poco más...');
+              cy.wait(500);
             }
           });
-        }).then(() => cy.wait(300));
+          cy.wait(300); // Espera final
+        });
       });
     });
   }
