@@ -24,14 +24,23 @@ describe('DEPARTAMENTOS - Validación completa con gestión de errores y reporte
     cy.procesarResultadosPantalla('Departamentos');
   });
 
+  // Casos pausados: vacío para ejecutar todos
+  const CASOS_PAUSADOS = new Set();
+
   it('Ejecutar todos los casos de Departamentos desde Google Sheets', () => {
     cy.obtenerDatosExcel('Departamentos').then((casosExcel) => {
       cy.log(`Cargados ${casosExcel.length} casos desde Excel para Departamentos`);
 
       const prioridadFiltro = (Cypress.env('prioridad') || '').toString().toUpperCase();
-      const casosFiltrados = prioridadFiltro && prioridadFiltro !== 'TODAS'
+      let casosFiltrados = prioridadFiltro && prioridadFiltro !== 'TODAS'
         ? casosExcel.filter(c => (c.prioridad || '').toUpperCase() === prioridadFiltro)
         : casosExcel;
+
+      // Filtrar casos pausados
+      casosFiltrados = casosFiltrados.filter((caso) => {
+        const id = String(caso.caso || '').trim().toUpperCase();
+        return !CASOS_PAUSADOS.has(id);
+      });
 
       let chain = cy.wrap(null);
       casosFiltrados.forEach((casoExcel, idx) => {
@@ -857,7 +866,20 @@ describe('DEPARTAMENTOS - Validación completa con gestión de errores y reporte
     cy.get('.fi-ta-table, table').scrollTo('right', { ensureScrollable: false });
     cy.wait(500);
 
-    cy.get('a:contains("Editar"), button:contains("Editar")').first().click({ force: true });
+    // Cerrar cualquier modal abierto (como el del perfil) antes de buscar el botón Editar
+    cy.get('body').then(($body) => {
+      const hayModal = $body.find('.fi-modal:visible, [role="dialog"]:visible').length > 0;
+      if (hayModal) {
+        cy.log('Cerrando modal abierto antes de editar...');
+        cy.get('body').type('{esc}');
+        cy.wait(500);
+      }
+    });
+
+    // Buscar el botón "Editar" dentro de la primera fila de la tabla (más específico)
+    cy.get('.fi-ta-row:visible').first().within(() => {
+      cy.get('a:contains("Editar"), button:contains("Editar")').first().click({ force: true });
+    });
     cy.url().should('include', '/departamentos/');
 
     // Rellenar campos con scrollIntoView y force: true

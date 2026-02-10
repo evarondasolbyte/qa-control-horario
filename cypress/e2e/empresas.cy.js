@@ -186,6 +186,10 @@ describe('EMPRESAS - Validación completa con gestión de errores y reporte a Ex
                 const hayAvisoDuplicado = [
                   'duplicad',
                   'ya existe',
+                  'ya ha sido registrado',
+                  'ha sido registrado',
+                  'campo nombre',
+                  'campo cif',
                   'duplicate',
                   'aviso',
                   'registrado'
@@ -194,7 +198,7 @@ describe('EMPRESAS - Validación completa con gestión de errores y reporte a Ex
                 cy.registrarResultados({
                   numero,
                   nombre,
-                  esperado: 'Aviso indicando que la empresa ya existe',
+                  esperado: 'Aviso indicando que la empresa ya existe (ej: "El campo nombre ya ha sido registrado")',
                   obtenido: hayAvisoDuplicado
                     ? 'Aviso de duplicado mostrado correctamente'
                     : 'No apareció el aviso esperado',
@@ -956,7 +960,20 @@ describe('EMPRESAS - Validación completa con gestión de errores y reporte a Ex
     cy.get('.fi-ta-table, table').scrollTo('right', { ensureScrollable: false });
     cy.wait(500);
 
-    cy.get('a:contains("Editar"), button:contains("Editar")').first().click({ force: true });
+    // Cerrar cualquier modal abierto (como el del perfil) antes de buscar el botón Editar
+    cy.get('body').then(($body) => {
+      const hayModal = $body.find('.fi-modal:visible, [role="dialog"]:visible').length > 0;
+      if (hayModal) {
+        cy.log('Cerrando modal abierto antes de editar...');
+        cy.get('body').type('{esc}');
+        cy.wait(500);
+      }
+    });
+
+    // Buscar el botón "Editar" dentro de la primera fila de la tabla (más específico)
+    cy.get('.fi-ta-row:visible').first().within(() => {
+      cy.get('a:contains("Editar"), button:contains("Editar")').first().click({ force: true });
+    });
     cy.url().should('include', '/empresas/');
 
     // Rellenar campos con scrollIntoView y force: true para evitar problemas de visibilidad

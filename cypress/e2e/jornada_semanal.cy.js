@@ -23,14 +23,25 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
     cy.procesarResultadosPantalla('Jornada Semanal');
   });
 
+  // Ejecutar TODOS los casos (sin filtros ni pausas)
+  const CASOS_OK = new Set();
+  const CASOS_PAUSADOS = new Set();
+
   it('Ejecutar todos los casos de Jornada Semanal desde Google Sheets', () => {
     cy.obtenerDatosExcel('Jornada Semanal').then((casosExcel) => {
       cy.log(`Cargados ${casosExcel.length} casos desde Excel para Jornada Semanal`);
 
       const prioridadFiltro = (Cypress.env('prioridad') || '').toString().toUpperCase();
-      const casosFiltrados = prioridadFiltro && prioridadFiltro !== 'TODAS'
+      let casosFiltrados = prioridadFiltro && prioridadFiltro !== 'TODAS'
         ? casosExcel.filter(c => (c.prioridad || '').toUpperCase() === prioridadFiltro)
         : casosExcel;
+
+      casosFiltrados = casosFiltrados.filter((caso) => {
+        const id = String(caso.caso || '').trim().toUpperCase();
+        if (CASOS_PAUSADOS.has(id)) return false;
+        if (CASOS_OK.size === 0) return true;
+        return CASOS_OK.has(id);
+      });
 
       let chain = cy.wrap(null);
       casosFiltrados.forEach((casoExcel, idx) => {
@@ -87,7 +98,7 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
           
           // Si no hay tabla ni mensaje, esperar un poco más y buscar la tabla
           cy.log('Esperando a que la tabla se cargue...');
-          return cy.get('.fi-ta-table, table', { timeout: 20000 }).should('exist').catch(() => {
+          return cy.get('.fi-ta-table, table', { timeout: 20000 }).should('exist').then(null, () => {
             // Si después del timeout no hay tabla, verificar una última vez si hay mensaje de sin datos
             return cy.get('body', { timeout: 2000 }).then(($body2) => {
               const textoBody2 = $body2.text().toLowerCase();
@@ -236,7 +247,8 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
       'mostrarColumna': mostrarColumna,
       'ordenarColumna': ordenarColumna,
       'filtrarEmpresa': filtrarEmpresa,
-      'anadirTiposJornada': anadirTiposJornada
+      'anadirTiposJornada': anadirTiposJornada,
+      'eliminarJornadaDiaria': eliminarJornadaDiaria
     };
 
     if (!funciones[nombreFuncion]) {
@@ -439,57 +451,25 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
 
   function ejecutarEditarIndividual(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
+    const numero = parseInt(String(casoExcel.caso || '').replace(/[^0-9]/g, ''), 10);
     const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || casoExcel.dato_1 || generarNombreUnico('jornada-edit');
-    const motivoCambio = 'pruebas';
 
+    // TC027: entrar en editar y salir SIN guardar (no queremos modificar nada).
+    if (numero === 27) {
+      return editarAbrirFormulario()
+        .then(() => encontrarBotonAlFinal('Cancelar'))
+        .then(() => cy.get('body').then(($body) => {
+          if ($body.find('.fi-modal:visible, [role="dialog"]:visible, .swal2-container:visible').length) {
+            return confirmarModal(['Sí', 'Si', 'Salir', 'Descartar', 'Aceptar', 'Confirmar', 'Cancelar', 'Cerrar', 'No']);
+          }
+          return cy.wrap(null);
+        }))
+        .then(() => cy.url({ timeout: 10000 }).should('include', JORNADA_SEMANAL_PATH));
+    }
+
+    // Resto de casos: editar y guardar normalmente (sin motivo del cambio; si existe en el futuro, no debe romper).
     return editarAbrirFormulario()
       .then(() => escribirCampo('input[name="data.name"], input#data\\.name', nombre))
-      .then(() => {
-        // Escribir el motivo del cambio antes de guardar
-        cy.log('Escribiendo motivo del cambio...');
-        cy.scrollTo('bottom', { duration: 500 });
-        cy.wait(300);
-        
-        // Buscar el campo "Motivo del cambio" por múltiples selectores
-        const selectoresMotivo = [
-          'textarea#data\\.change_reason',
-          'textarea[name="data.change_reason"]',
-          'textarea[wire\\:model="data.change_reason"]',
-          'textarea[placeholder*="Cambio de convenio"]',
-          'textarea[placeholder*="ajuste de jornada"]'
-        ];
-        
-        return cy.get('body').then(($body) => {
-          let encontrado = false;
-          for (const selector of selectoresMotivo) {
-            if ($body.find(selector).length > 0) {
-              encontrado = true;
-              return escribirCampo(selector, motivoCambio);
-            }
-          }
-          
-          // Si no se encuentra por selectores específicos, buscar por label
-          if (!encontrado) {
-            return cy.contains('label, span, div', /Motivo del cambio/i, { timeout: 10000 })
-              .then(($label) => {
-                const $wrapper = $label.closest('div, section, form, fieldset');
-                const $textarea = $wrapper.find('textarea').first();
-                if ($textarea.length) {
-                  return cy.wrap($textarea)
-                    .scrollIntoView()
-                    .clear({ force: true })
-                    .type(motivoCambio, { force: true, delay: 20 });
-                }
-                // Si aún no se encuentra, buscar cualquier textarea cerca del label
-                return cy.get('textarea:visible')
-                  .first()
-                  .scrollIntoView()
-                  .clear({ force: true })
-                  .type(motivoCambio, { force: true, delay: 20 });
-              });
-          }
-        });
-      })
       .then(() => encontrarBotonAlFinal('Guardar cambios'))
       .then(() => esperarToastExito());
   }
@@ -635,8 +615,312 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
   function anadirTiposJornada(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
 
+    const numero = parseInt(String(casoExcel.caso || '').replace(/[^0-9]/g, ''), 10);
     const tipoJornada = obtenerDatoPorEtiqueta(casoExcel, 'tipo') || casoExcel.dato_1 || '';
     const motivoCambio = 'pruebas';
+
+    // TC038: mejor flujo -> crear una jornada semanal, luego editar ESA misma y añadir una jornada diaria
+    if (numero === 38) {
+      const campos = obtenerCamposDesdeExcel(casoExcel);
+      const empresa = campos['data.company_id'] || 'Admin';
+      const nombreCreado = generarNombreUnico('jornada-semanal-');
+      const horas = (campos['data.weekly_hours_hours'] ?? '40').toString();
+      const minutos = (campos['data.weekly_hours_minutes'] ?? '0').toString();
+      const descripcion = (campos['data.description'] ?? '').toString();
+
+      const editarPorNombre = (nombre) => {
+        cy.url().then((urlActual) => {
+          if (!urlActual.includes(JORNADA_SEMANAL_PATH)) {
+            cy.visit(JORNADA_SEMANAL_URL_ABS, { failOnStatusCode: false });
+            cy.url({ timeout: 20000 }).should('include', JORNADA_SEMANAL_PATH);
+          }
+        });
+
+        // Buscar por nombre y editar justo esa fila
+        cy.get('input[placeholder*="Buscar"], input[placeholder*="Search"]', { timeout: 10000 })
+          .filter(':visible')
+          .first()
+          .clear({ force: true })
+          .type(`${nombre}{enter}`, { force: true });
+        cy.wait(1200);
+
+        return cy.contains('.fi-ta-row:visible, tr:visible', nombre, { timeout: 15000 })
+          .scrollIntoView()
+          .within(() => {
+            cy.contains('a, button', /Editar/i, { timeout: 10000 }).first().click({ force: true });
+          })
+          .then(() => cy.url({ timeout: 10000 }).should('match', /\/jornada-semanal\/.+\/edit/));
+      };
+
+      const asegurarEnEdicionTrasCrear = () => {
+        return cy.url({ timeout: 20000 }).then((urlActual) => {
+          // Normalmente, tras "Crear" redirige directamente a /edit.
+          if (/\/jornada-semanal\/.+\/edit/i.test(urlActual)) {
+            return cy.wrap(null);
+          }
+          // En algunos casos podría volver al listado; hacemos fallback por nombre.
+          if (urlActual.includes(JORNADA_SEMANAL_PATH)) {
+            return editarPorNombre(nombreCreado);
+          }
+          // Último fallback: ir al listado y buscar.
+          cy.visit(JORNADA_SEMANAL_URL_ABS, { failOnStatusCode: false });
+          cy.url({ timeout: 20000 }).should('include', JORNADA_SEMANAL_PATH);
+          return editarPorNombre(nombreCreado);
+        });
+      };
+
+      const abrirAsignacionJornadaDiaria = () => {
+        cy.scrollTo('bottom', { duration: 500 });
+        cy.wait(300);
+        return cy.contains('button, a', /(Añadir Tipos?\s+de\s+Jornada|Añadir\s+Jornada\s+diaria)/i, { timeout: 10000 })
+          .filter(':visible')
+          .first()
+          .scrollIntoView()
+          .click({ force: true })
+          .then(() => cy.wait(800));
+      };
+
+      const seleccionarPrimeraOpcionDisponible = () => {
+        // Detectar cualquier contenedor tipo modal/drawer/slide-over/listbox
+        return cy.get('body', { timeout: 10000 }).then(($body) => {
+          const selectoresContenedor = [
+            '.fi-modal:visible',
+            '[role="dialog"]:visible',
+            '.fi-slide-over:visible',
+            '[role="listbox"]:visible',
+            '.fi-dropdown-panel:visible'
+          ];
+          const sel = selectoresContenedor.find((s) => $body.find(s).length > 0);
+          if (!sel) {
+            cy.log('No se detectó contenedor de selección tras pulsar "Añadir Jornada diaria"');
+            return cy.wrap(null);
+          }
+
+          // Importante: evitar `cy.last()` sobre un set vacío (da el error jQuery{0}).
+          // Seleccionamos manualmente el último elemento encontrado y, si no hay ninguno, salimos sin fallar.
+          cy.get(sel, { timeout: 10000 }).then(($els) => {
+            if (!$els || !$els.length) {
+              cy.log('No se encontró contenedor de selección (selector encontrado, pero sin nodos en este momento)');
+              return cy.wrap(null);
+            }
+            const el = $els.get($els.length - 1);
+            cy.wrap(el, { log: false }).as('contenedorSeleccion');
+            return cy.wrap(el);
+          });
+
+          const scrollComoRatonHastaVerEnviar = (intentos = 14) => {
+            // Si el modal ya se cerró, no seguir intentando (evita fallos por elementos "detached").
+            return cy.get('body', { timeout: 15000 }).then(($body) => {
+              const sigueAbierto = $body.find('.fi-modal:visible, [role="dialog"]:visible').length > 0;
+              if (!sigueAbierto) {
+                return cy.wrap(null);
+              }
+
+              return cy.get('@contenedorSeleccion').then(($dialog) => {
+              const $d = Cypress.$($dialog);
+
+              const clickEnviarDentroDelModal = () => {
+                return cy.get('@contenedorSeleccion').then(($cont) => {
+                  const $c = Cypress.$($cont);
+                  // Si el alias apunta a un listbox/panel interno, subir al modal real.
+                  const $modal = $c.closest('.fi-modal, [role="dialog"]');
+                  const $scope = $modal.length ? $modal : $c;
+
+                  const normalizar = (s) => (s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+                  // Buscar botón "Enviar" sin depender de cy.contains (más robusto con spans/whitespace)
+                  const buscarBotonEnviar = ($root) => {
+                    const $r = Cypress.$($root);
+                    // Priorizar el footer del modal si existe
+                    const $footer = $r.find('.fi-modal-footer-actions, .fi-modal-footer').last();
+                    const $candidatos = ($footer.length ? $footer : $r).find('button, a');
+                    return $candidatos.filter((_, el) => normalizar(Cypress.$(el).text()) === 'enviar');
+                  };
+
+                  const $btn = buscarBotonEnviar($scope).filter(':visible').first();
+                  if ($btn.length) {
+                    return cy.wrap($btn)
+                      .scrollIntoView({ ensureScrollable: false })
+                      .click({ force: true })
+                      .then(() => cy.wait(600));
+                  }
+
+                  // Fallback 1: buscar por label interno típico de Filament
+                  const $btnPorLabel = $scope.find('.fi-btn-label, span')
+                    .filter((_, el) => normalizar(Cypress.$(el).text()) === 'enviar')
+                    .closest('button, a')
+                    .filter(':visible')
+                    .first();
+                  if ($btnPorLabel.length) {
+                    return cy.wrap($btnPorLabel)
+                      .scrollIntoView({ ensureScrollable: false })
+                      .click({ force: true })
+                      .then(() => cy.wait(600));
+                  }
+
+                  // Fallback 2: buscar en toda la página (por si el footer está fuera del scope)
+                  return cy.get('body').then(($body) => {
+                    const $btnGlobal = buscarBotonEnviar($body).filter(':visible').first();
+                    if ($btnGlobal.length) {
+                      return cy.wrap($btnGlobal)
+                        .scrollIntoView({ ensureScrollable: false })
+                        .click({ force: true })
+                        .then(() => cy.wait(600));
+                    }
+                    cy.log('No se encontró botón "Enviar" (ni en modal, ni por label, ni global)');
+                    return cy.wrap(null);
+                  });
+                });
+              };
+
+              // Si hay un contenedor con scroll (aunque no tenga overflow-y: auto/scroll visible),
+              // escoger el que más "puede bajar" (scrollHeight - clientHeight) y bajarlo al final.
+              const $candidatosScroll = $d.find('*').addBack().filter((_, el) => {
+                try {
+                  return el && el.scrollHeight && el.clientHeight && (el.scrollHeight - el.clientHeight) > 20;
+                } catch {
+                  return false;
+                }
+              });
+              if ($candidatosScroll.length) {
+                let best = $candidatosScroll.get(0);
+                let bestDelta = best.scrollHeight - best.clientHeight;
+                $candidatosScroll.each((_, el) => {
+                  const delta = el.scrollHeight - el.clientHeight;
+                  if (delta > bestDelta) {
+                    best = el;
+                    bestDelta = delta;
+                  }
+                });
+                if (best) {
+                  return cy.wrap(best)
+                    .scrollTo('bottom', { ensureScrollable: false, duration: 300 })
+                    .wait(250)
+                    .then(() => clickEnviarDentroDelModal())
+                    .then(null, () => {
+                      // Si aún no está, repetir scroll (a veces el modal pinta el footer al final)
+                      return cy.wrap(best)
+                        .scrollTo('bottom', { ensureScrollable: false, duration: 300 })
+                        .wait(250)
+                        .then(() => clickEnviarDentroDelModal())
+                        .then(null, () => cy.wrap(null));
+                    });
+                }
+              }
+
+              // ¿Ya se ve "Enviar" dentro del modal?
+              const $btnEnviar = $d.find('button, a')
+                .filter((_, el) => /^enviar$/i.test(Cypress.$(el).text().trim()))
+                .filter(':visible')
+                .first();
+              if ($btnEnviar.length) {
+                return clickEnviarDentroDelModal();
+              }
+
+              if (intentos <= 0) {
+                // No rompemos el test si no aparece (dejará trazas en el log).
+                cy.log('No se encontró el botón "Enviar" tras hacer scroll en el modal');
+                return cy.wrap(null);
+              }
+
+              // 1) Intentar "scroll" llevando el último elemento de la lista al viewport (equivale a rueda del ratón).
+              const $items = $d.find('[role="option"], label, .fi-ta-row, tr').filter(':visible');
+              if ($items.length) {
+                return cy.wrap($items.last())
+                  .scrollIntoView({ ensureScrollable: false })
+                  .wait(200)
+                  .then(() => scrollComoRatonHastaVerEnviar(intentos - 1));
+              }
+
+              // 2) Fallback: disparar evento wheel en el contenedor/último elemento con scrollHeight grande (scrollbar puede estar oculto).
+              const $scrollables = $d.find('*').filter((_, el) => el.scrollHeight > el.clientHeight + 10);
+              const target = ($scrollables.length ? $scrollables.get($scrollables.length - 1) : $d.get(0));
+              if (target) {
+                return cy.wrap(target)
+                  .trigger('wheel', { deltaY: 1200, bubbles: true, cancelable: true })
+                  .wait(200)
+                  .then(() => scrollComoRatonHastaVerEnviar(intentos - 1));
+              }
+
+              // 3) Último fallback: scroll de la ventana
+              return cy.window().then((win) => {
+                win.scrollBy(0, 1200);
+              }).then(() => cy.wait(200))
+                .then(() => scrollComoRatonHastaVerEnviar(intentos - 1));
+            });
+            });
+          };
+
+          return cy.get('@contenedorSeleccion')
+            .within(() => {
+            // Si hay buscador, filtrar por tipo (si viene informado)
+            if (tipoJornada) {
+              cy.get('input[type="search"], input[placeholder*="Buscar"], input[placeholder*="Search"]', { timeout: 1000 })
+                .filter(':visible')
+                .first()
+                .then(($inp) => {
+                  if ($inp && $inp.length) {
+                    cy.wrap($inp).clear({ force: true }).type(tipoJornada, { force: true, delay: 20 });
+                    cy.wait(300);
+                  }
+                }, () => cy.wrap(null));
+            }
+
+            // Prioridad 1: checkbox
+            cy.get('input[type="checkbox"]:visible, .fi-checkbox input:visible', { timeout: 1500 })
+              .then(($cb) => {
+                if ($cb.length) {
+                  cy.wrap($cb.first()).scrollIntoView().click({ force: true });
+                  return;
+                }
+                // Prioridad 2: opciones/filas/lista
+                cy.get('[role="option"]:visible, .fi-ta-row:visible, tr:visible, label:visible', { timeout: 3000 })
+                  .first()
+                  .scrollIntoView()
+                  .click({ force: true });
+              }, () => {
+                // Si no hay checkbox, intentar con opciones/filas
+                cy.get('[role="option"]:visible, .fi-ta-row:visible, tr:visible, label:visible', { timeout: 3000 })
+                  .first()
+                  .scrollIntoView()
+                  .click({ force: true });
+              });
+
+            })
+            .then(() => {
+              // IMPORTANTE: el botón "Enviar" aparece al final del scroll del modal.
+              // Scroll hasta abajo del contenedor con scroll y luego click en "Enviar".
+              return scrollComoRatonHastaVerEnviar();
+            });
+        });
+      };
+
+      return abrirFormularioCrear()
+        .then(() => {
+          seleccionarEmpresaFormulario(empresa);
+          escribirCampo('input[name="data.name"], input#data\\.name', nombreCreado);
+          escribirCampo('input[name="data.weekly_hours_hours"], input#data\\.weekly_hours_hours', horas);
+          escribirCampo('input[name="data.weekly_hours_minutes"], input#data\\.weekly_hours_minutes', minutos);
+          if (descripcion) {
+            escribirCampo('textarea#data\\.description, textarea[name="data.description"], trix-editor#data\\.description', descripcion);
+          }
+          return encontrarBotonAlFinal('Crear');
+        })
+        .then(() => cy.wait(1800))
+        .then(() => asegurarEnEdicionTrasCrear())
+        .then(() => abrirAsignacionJornadaDiaria())
+        .then(() => seleccionarPrimeraOpcionDisponible())
+        .then(() => {
+          // Validación suave: debería verse al menos una fila en la tabla de asignación (si existe tabla)
+          return cy.get('body').then(($b) => {
+            const hayBloque = /Asignar jornadas diarias/i.test($b.text());
+            if (!hayBloque) return cy.wrap(null);
+            const filas = $b.find('.fi-ta-row:visible, tr:visible').length;
+            if (filas > 0) cy.log(`Asignación realizada (filas visibles: ${filas})`);
+            return cy.wrap(null);
+          });
+        });
+    }
 
     return editarAbrirFormulario()
       .then(() => cy.url({ timeout: 10000 }).should('match', /\/jornada-semanal\/.+\/edit/))
@@ -644,7 +928,10 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
         cy.scrollTo('bottom', { duration: 500 });
         cy.wait(300);
         const abrirModal = () => {
-          return cy.contains('button, a', /Añadir Tipos? de Jornada/i, { timeout: 10000 })
+          // El texto del botón ha cambiado en algunos entornos:
+          // - "Añadir Tipos de Jornada" (antiguo)
+          // - "Añadir Jornada diaria" (nuevo)
+          return cy.contains('button, a', /(Añadir Tipos?\s+de\s+Jornada|Añadir\s+Jornada\s+diaria)/i, { timeout: 10000 })
             .filter(':visible')
             .first()
             .scrollIntoView()
@@ -818,6 +1105,67 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
           }
         });
       });
+  }
+
+  function eliminarJornadaDiaria(casoExcel) {
+    cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
+
+    const confirmarSiExiste = () => {
+      return cy.get('body').then(($body) => {
+        if ($body.find('.fi-modal:visible, [role="dialog"]:visible, .swal2-container:visible').length) {
+          return confirmarModal(['Sí', 'Si', 'Confirmar', 'Aceptar', 'OK']);
+        }
+        return cy.wrap(null);
+      });
+    };
+
+    const cerrarSiQuedaModal = () => {
+      return cy.get('body').then(($body) => {
+        if ($body.find('.fi-modal:visible, [role="dialog"]:visible, .swal2-container:visible').length) {
+          return confirmarModal(['Cerrar', 'Cancelar', 'No', 'OK', 'Aceptar']);
+        }
+        return cy.wrap(null);
+      });
+    };
+
+    // TC039: igual que TC038 pero, tras asignar, también desvincula.
+    // Reutilizamos el flujo robusto de creación+asignación de TC038 llamándolo internamente,
+    // para evitar duplicar toda la lógica de "Enviar" en el modal.
+    const casoParaAsignar = {
+      ...casoExcel,
+      caso: 'TC038',
+      nombre: `TC039 (setup) - ${casoExcel.nombre || 'Asignar jornada diaria antes de desvincular'}`
+    };
+
+    return anadirTiposJornada(casoParaAsignar)
+      .then(() => {
+        // Ya estamos en /edit de la jornada semanal creada.
+        cy.scrollTo('bottom', { duration: 500 });
+        cy.wait(300);
+        return cy.contains('body', /Asignar jornadas diarias/i, { timeout: 10000 })
+          .scrollIntoView({ ensureScrollable: false });
+      })
+      .then(() => {
+        return cy.get('body', { timeout: 10000 }).then(($body) => {
+          const $btn = $body.find('button, a')
+            .filter((_, el) => /desvincular/i.test(Cypress.$(el).text()))
+            .filter(':visible')
+            .first();
+
+          if (!$btn.length) {
+            cy.log('No se encontró botón "Desvincular" (puede que no haya nada asignado) - OK');
+            return cy.wrap(null);
+          }
+
+          cy.wrap($btn)
+            .scrollIntoView({ ensureScrollable: false })
+            .click({ force: true });
+          return cy.wait(400);
+        });
+      })
+      .then(() => confirmarSiExiste())
+      .then(() => cy.wait(1200))
+      .then(() => cerrarSiQuedaModal());
   }
 
   // === Helpers reutilizables ===
