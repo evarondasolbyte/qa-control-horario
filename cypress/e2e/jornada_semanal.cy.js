@@ -37,8 +37,19 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
         : casosExcel;
 
       casosFiltrados = casosFiltrados.filter((caso) => {
-        const id = String(caso.caso || '').trim().toUpperCase();
-        if (CASOS_PAUSADOS.has(id)) return false;
+        let id = String(caso.caso || '').trim().toUpperCase();
+        // Normalizar: si viene solo el número, añadir "TC" al inicio
+        if (id && /^\d+$/.test(id)) {
+          id = `TC${id.padStart(3, '0')}`;
+        }
+        // Si no tiene formato TC, intentar normalizar
+        if (id && !id.startsWith('TC')) {
+          id = `TC${id.padStart(3, '0')}`;
+        }
+        if (CASOS_PAUSADOS.has(id)) {
+          cy.log(`Caso ${id} está pausado - saltando`);
+          return false;
+        }
         if (CASOS_OK.size === 0) return true;
         return CASOS_OK.has(id);
       });
@@ -170,7 +181,14 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
     cy.log(`${nombre} [${casoExcel.prioridad || 'SIN PRIORIDAD'}]`);
     cy.log(`Función solicitada: "${casoExcel.funcion}"`);
 
-    const funcion = obtenerFuncionPorNombre(casoExcel.funcion);
+    // Caso 15: Forzar ejecutarCrearIndividual (igual que caso 16)
+    let funcionNombre = casoExcel.funcion;
+    if (numero === 15) {
+      funcionNombre = 'ejecutarCrearIndividual';
+      cy.log('TC015: Forzando ejecutarCrearIndividual (igual que TC016)');
+    }
+
+    const funcion = obtenerFuncionPorNombre(funcionNombre);
 
     if (idx > 0) cy.wait(600);
     cy.resetearFlagsTest();
@@ -215,6 +233,141 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
       resultado,
       archivo,
       pantalla: 'Jornada Semanal'
+    });
+  }
+
+  // Helper: Verificar error 500 después de pulsar Crear
+  function verificarError500DespuesCrear(casoExcel, numero) {
+    return cy.get('body', { timeout: 3000 }).then(($body) => {
+      if (!$body || $body.length === 0) {
+        // Si no hay body, verificar en el documento
+        return cy.document().then((doc) => {
+          if (!doc || !doc.body) {
+            // Si no hay documento o body, registrar error 500 de todas formas
+            cy.log('No se pudo obtener el documento - registrando ERROR 500 en Excel');
+            const casoId = casoExcel.caso || `TC${String(numero).padStart(3, '0')}`;
+            const nombre = `${casoId} - ${casoExcel.nombre}`;
+            registrarResultado(
+              casoId,
+              nombre,
+              casoExcel.resultado_esperado || 'Comportamiento correcto',
+              'ERROR 500: Error interno del servidor detectado al crear',
+              'ERROR'
+            );
+            return cy.wrap(true); // Indica que hubo error
+          }
+          const docText = doc.body.textContent ? doc.body.textContent.toLowerCase() : '';
+          const tieneError500 = docText.includes('500') ||
+            docText.includes('internal server error') ||
+            docText.includes('error interno del servidor') ||
+            docText.includes('server error') ||
+            docText.includes('500 server error');
+          
+          if (tieneError500) {
+            cy.log('ERROR 500 detectado después de crear - registrando en Excel');
+            const casoId = casoExcel.caso || `TC${String(numero).padStart(3, '0')}`;
+            const nombre = `${casoId} - ${casoExcel.nombre}`;
+            registrarResultado(
+              casoId,
+              nombre,
+              casoExcel.resultado_esperado || 'Comportamiento correcto',
+              'ERROR 500: Error interno del servidor detectado al crear',
+              'ERROR'
+            );
+            return cy.wrap(true); // Indica que hubo error
+          }
+          return cy.wrap(false); // No hubo error
+        }, () => {
+          // Si falla al obtener el documento, registrar error 500 de todas formas
+          cy.log('Error al obtener el documento - registrando ERROR 500 en Excel');
+          const casoId = casoExcel.caso || `TC${String(numero).padStart(3, '0')}`;
+          const nombre = `${casoId} - ${casoExcel.nombre}`;
+          registrarResultado(
+            casoId,
+            nombre,
+            casoExcel.resultado_esperado || 'Comportamiento correcto',
+            'ERROR 500: Error interno del servidor detectado al crear',
+            'ERROR'
+          );
+          return cy.wrap(true); // Indica que hubo error
+        });
+      }
+
+      const texto = $body.text() ? $body.text().toLowerCase() : '';
+      const tieneError500 = texto.includes('500') ||
+        texto.includes('internal server error') ||
+        texto.includes('error interno del servidor') ||
+        texto.includes('server error') ||
+        texto.includes('500 server error') ||
+        $body.find('[class*="error-500"], [class*="error500"], [id*="error-500"]').length > 0;
+
+      if (tieneError500) {
+        cy.log('ERROR 500 detectado después de crear - registrando en Excel');
+        const casoId = casoExcel.caso || `TC${String(numero).padStart(3, '0')}`;
+        const nombre = `${casoId} - ${casoExcel.nombre}`;
+        registrarResultado(
+          casoId,
+          nombre,
+          casoExcel.resultado_esperado || 'Comportamiento correcto',
+          'ERROR 500: Error interno del servidor detectado al crear',
+          'ERROR'
+        );
+        return cy.wrap(true); // Indica que hubo error
+      }
+
+      return cy.wrap(false); // No hubo error
+    }, () => {
+      // Si falla al obtener el body, verificar en el documento
+      return cy.document().then((doc) => {
+        if (!doc || !doc.body) {
+          // Si no hay documento o body, registrar error 500 de todas formas
+          cy.log('No se pudo obtener el documento - registrando ERROR 500 en Excel');
+          const casoId = casoExcel.caso || `TC${String(numero).padStart(3, '0')}`;
+          const nombre = `${casoId} - ${casoExcel.nombre}`;
+          registrarResultado(
+            casoId,
+            nombre,
+            casoExcel.resultado_esperado || 'Comportamiento correcto',
+            'ERROR 500: Error interno del servidor detectado al crear',
+            'ERROR'
+          );
+          return cy.wrap(true); // Indica que hubo error
+        }
+        const docText = doc.body.textContent ? doc.body.textContent.toLowerCase() : '';
+        const tieneError500 = docText.includes('500') ||
+          docText.includes('internal server error') ||
+          docText.includes('error interno del servidor') ||
+          docText.includes('server error') ||
+          docText.includes('500 server error');
+        
+        if (tieneError500) {
+          cy.log('ERROR 500 detectado en el documento después de crear - registrando en Excel');
+          const casoId = casoExcel.caso || `TC${String(numero).padStart(3, '0')}`;
+          const nombre = `${casoId} - ${casoExcel.nombre}`;
+          registrarResultado(
+            casoId,
+            nombre,
+            casoExcel.resultado_esperado || 'Comportamiento correcto',
+            'ERROR 500: Error interno del servidor detectado al crear',
+            'ERROR'
+          );
+          return cy.wrap(true); // Indica que hubo error
+        }
+        return cy.wrap(false); // No hubo error
+      }, () => {
+        // Si falla al obtener el documento, registrar error 500 de todas formas
+        cy.log('Error al obtener el documento - registrando ERROR 500 en Excel');
+        const casoId = casoExcel.caso || `TC${String(numero).padStart(3, '0')}`;
+        const nombre = `${casoId} - ${casoExcel.nombre}`;
+        registrarResultado(
+          casoId,
+          nombre,
+          casoExcel.resultado_esperado || 'Comportamiento correcto',
+          'ERROR 500: Error interno del servidor detectado al crear',
+          'ERROR'
+        );
+        return cy.wrap(true); // Indica que hubo error
+      });
     });
   }
 
@@ -409,22 +562,38 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
       }
 
       if (numero === 17) {
-        return encontrarBotonAlFinal('Crear y crear otro').then(() => cy.wait(2000));
+        return encontrarBotonAlFinal('Crear y crear otro')
+          .then(() => cy.wait(2000))
+          .then(() => {
+            // Verificar error 500 después de crear
+            return verificarError500DespuesCrear(casoExcel, numero);
+          });
       }
 
       if ([36, 37].includes(numero)) {
         return encontrarBotonAlFinal('Crear')
           .then(() => cy.wait(1500))
           .then(() => {
-            cy.get('body').should(($body) => {
-              const texto = $body.text().toLowerCase();
-              expect(texto).to.include('minut');
+            // Verificar error 500 después de crear
+            return verificarError500DespuesCrear(casoExcel, numero).then((huboError) => {
+              if (huboError) {
+                return cy.wrap(null); // Si hubo error, no continuar con las validaciones
+              }
+              cy.get('body').should(($body) => {
+                const texto = $body.text().toLowerCase();
+                expect(texto).to.include('minut');
+              });
+              return cy.url().should('include', '/jornada-semanal/create');
             });
-            return cy.url().should('include', '/jornada-semanal/create');
           });
       }
 
-      return encontrarBotonAlFinal('Crear').then(() => cy.wait(2000));
+      return encontrarBotonAlFinal('Crear')
+        .then(() => cy.wait(2000))
+        .then(() => {
+          // Verificar error 500 después de crear
+          return verificarError500DespuesCrear(casoExcel, numero);
+        });
     });
   }
 
@@ -621,6 +790,15 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
 
     // TC038: mejor flujo -> crear una jornada semanal, luego editar ESA misma y añadir una jornada diaria
     if (numero === 38) {
+      // Detectar si está siendo llamado desde TC039 (setup)
+      const esLlamadoDesdeTC039 = casoExcel.nombre && casoExcel.nombre.includes('TC039 (setup)');
+      const casoIdReal = esLlamadoDesdeTC039 ? 'TC039' : 'TC038';
+      const numeroReal = esLlamadoDesdeTC039 ? 39 : 38;
+      // Si es llamado desde TC039, usar el nombre original sin "(setup)"
+      const nombreReal = esLlamadoDesdeTC039 
+        ? casoExcel.nombre.replace(/TC039\s*\(setup\)\s*-\s*/i, '') 
+        : casoExcel.nombre;
+      
       const campos = obtenerCamposDesdeExcel(casoExcel);
       const empresa = campos['data.company_id'] || 'Admin';
       const nombreCreado = generarNombreUnico('jornada-semanal-');
@@ -907,18 +1085,37 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
           return encontrarBotonAlFinal('Crear');
         })
         .then(() => cy.wait(1800))
-        .then(() => asegurarEnEdicionTrasCrear())
-        .then(() => abrirAsignacionJornadaDiaria())
-        .then(() => seleccionarPrimeraOpcionDisponible())
         .then(() => {
-          // Validación suave: debería verse al menos una fila en la tabla de asignación (si existe tabla)
-          return cy.get('body').then(($b) => {
-            const hayBloque = /Asignar jornadas diarias/i.test($b.text());
-            if (!hayBloque) return cy.wrap(null);
-            const filas = $b.find('.fi-ta-row:visible, tr:visible').length;
-            if (filas > 0) cy.log(`Asignación realizada (filas visibles: ${filas})`);
-            return cy.wrap(null);
-          });
+          // Verificar error 500 después de crear
+          // Usar casoIdReal y numeroReal para que se registre correctamente (TC039 si es llamado desde TC039, TC038 si no)
+          const casoParaRegistro = {
+            ...casoExcel,
+            caso: casoIdReal,
+            nombre: nombreReal // Usar nombre sin "(setup)"
+          };
+          return verificarError500DespuesCrear(casoParaRegistro, numeroReal);
+        })
+        .then((huboError) => {
+          // Si hubo error 500, parar aquí y no ejecutar más pasos
+          if (huboError) {
+            cy.log(`ERROR 500 detectado en ${casoIdReal} - registrado en Excel, finalizando test`);
+            return cy.wrap(null); // Finalizar el test aquí, no continuar
+          }
+          // Si NO hubo error, continuar con el flujo normal
+          cy.log(`No se detectó error 500 en ${casoIdReal} - continuando con el test`);
+          return asegurarEnEdicionTrasCrear()
+            .then(() => abrirAsignacionJornadaDiaria())
+            .then(() => seleccionarPrimeraOpcionDisponible())
+            .then(() => {
+              // Validación suave: debería verse al menos una fila en la tabla de asignación (si existe tabla)
+              return cy.get('body').then(($b) => {
+                const hayBloque = /Asignar jornadas diarias/i.test($b.text());
+                if (!hayBloque) return cy.wrap(null);
+                const filas = $b.find('.fi-ta-row:visible, tr:visible').length;
+                if (filas > 0) cy.log(`Asignación realizada (filas visibles: ${filas})`);
+                return cy.wrap(null);
+              });
+            });
         });
     }
 
@@ -1139,11 +1336,52 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
 
     return anadirTiposJornada(casoParaAsignar)
       .then(() => {
+        // Verificar si hay error 500 en la página actual (sin registrar de nuevo, ya se registró en anadirTiposJornada)
+        // Solo verificamos para decidir si continuar o parar
+        return cy.get('body', { timeout: 3000 }).then(($body) => {
+          if (!$body || $body.length === 0) {
+            return cy.wrap(true); // Si no hay body, asumir error
+          }
+          const texto = $body.text() ? $body.text().toLowerCase() : '';
+          const tieneError500 = texto.includes('500') ||
+            texto.includes('internal server error') ||
+            texto.includes('error interno del servidor') ||
+            texto.includes('server error') ||
+            texto.includes('500 server error') ||
+            $body.find('[class*="error-500"], [class*="error500"], [id*="error-500"]').length > 0;
+          return cy.wrap(tieneError500);
+        }, () => {
+          // Si falla al obtener el body, verificar en el documento
+          return cy.document().then((doc) => {
+            if (!doc || !doc.body) {
+              return cy.wrap(true); // Si no hay documento, asumir error
+            }
+            const docText = doc.body.textContent ? doc.body.textContent.toLowerCase() : '';
+            const tieneError500 = docText.includes('500') ||
+              docText.includes('internal server error') ||
+              docText.includes('error interno del servidor') ||
+              docText.includes('server error') ||
+              docText.includes('500 server error');
+            return cy.wrap(tieneError500);
+          }, () => {
+            return cy.wrap(false); // Si falla todo, asumir que no hay error
+          });
+        });
+      })
+      .then((huboError) => {
+        // Si hubo error 500, parar aquí y no ejecutar más pasos
+        // El error ya se registró correctamente como TC039 dentro de anadirTiposJornada
+        if (huboError) {
+          cy.log('ERROR 500 detectado en TC039 (durante setup TC038) - ya registrado en Excel como TC039, finalizando test');
+          return cy.wrap(null); // Finalizar el test aquí, no continuar
+        }
+        // Si NO hubo error, continuar con el flujo normal de desvincular
+        cy.log('No se detectó error 500 en TC039 - continuando con el test de desvincular');
         // Ya estamos en /edit de la jornada semanal creada.
-        cy.scrollTo('bottom', { duration: 500 });
-        cy.wait(300);
-        return cy.contains('body', /Asignar jornadas diarias/i, { timeout: 10000 })
-          .scrollIntoView({ ensureScrollable: false });
+        return cy.scrollTo('bottom', { duration: 500 })
+          .then(() => cy.wait(300))
+          .then(() => cy.contains('body', /Asignar jornadas diarias/i, { timeout: 10000 })
+            .scrollIntoView({ ensureScrollable: false }));
       })
       .then(() => {
         return cy.get('body', { timeout: 10000 }).then(($body) => {
