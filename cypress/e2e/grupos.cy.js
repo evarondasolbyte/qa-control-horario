@@ -23,8 +23,7 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
     cy.procesarResultadosPantalla('Grupos');
   });
 
-  // Si está vacío, se ejecutan todos los casos que no estén en CASOS_PAUSADOS
-  // Ejecutar todos los casos que no estén pausados
+  // Ejecutar TODOS los casos (sin filtros ni pausas)
   const CASOS_OK = new Set();
   const CASOS_PAUSADOS = new Set();
 
@@ -591,7 +590,11 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
         cy.wait(1000);
         cy.get('.fi-ta-table, table', { timeout: 10000 }).should('be.visible');
 
-        // Buscar el grupo en la tabla usando el nombre transformado
+        // Hacer scroll a la derecha para ver el botón Editar
+        cy.get('.fi-ta-table, table').scrollTo('right', { ensureScrollable: false });
+        cy.wait(400);
+
+        // Buscar el grupo en la tabla usando el nombre transformado y hacer clic en "Editar" dentro de la fila
         cy.get('body').then(($body) => {
           let $row = $body.find('.fi-ta-row:visible').filter((i, el) => {
             const text = Cypress.$(el).text();
@@ -604,14 +607,26 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
           }
 
           if ($row.length > 0) {
-            cy.wrap($row).scrollIntoView().click({ force: true });
+            cy.wrap($row)
+              .scrollIntoView()
+              .within(() => {
+                cy.contains('button, a', /Editar/i, { timeout: 10000 })
+                  .should('be.visible')
+                  .click({ force: true });
+              });
           } else {
             // Último fallback: usar contains para cualquier fila visible
-            cy.contains('.fi-ta-row:visible', /\S+/, { timeout: 10000 }).first().click({ force: true });
+            cy.contains('.fi-ta-row:visible', /\S+/, { timeout: 10000 })
+              .first()
+              .within(() => {
+                cy.contains('button, a', /Editar/i, { timeout: 10000 })
+                  .should('be.visible')
+                  .click({ force: true });
+              });
           }
         });
 
-        return cy.contains('button, a', /Editar/i, { timeout: 10000 }).click({ force: true });
+        return cy.url({ timeout: 10000 }).should('include', GRUPOS_PATH);
       })
       .then(() => {
         // Hacer scroll al final para que aparezca el botón "Crear empleado y vincular al equipo"

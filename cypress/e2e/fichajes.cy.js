@@ -741,8 +741,8 @@ describe('FICHAJES - Validación completa con gestión de errores y reporte a Ex
     }
 
     if (paso.hora) {
-      chain = chain
-        .then(() => {
+    chain = chain
+      .then(() => {
           const horaEntrada = paso.hora || '08:00';
           cy.log(`Rellenando hora de entrada: ${horaEntrada}`);
           return establecerValorInput('#input_hora_entrada', horaEntrada);
@@ -769,8 +769,8 @@ describe('FICHAJES - Validación completa con gestión de errores y reporte a Ex
     }
 
     if (paso.hora) {
-      chain = chain
-        .then(() => {
+    chain = chain
+      .then(() => {
           const horaSalida = paso.hora || '17:00';
           cy.log(`Rellenando hora de salida: ${horaSalida}`);
           return establecerValorInput('#input_hora_salida', horaSalida);
@@ -832,7 +832,7 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
         cy.log(' Click Eliminar (selector directo, sin :visible)');
         return cy.get('button.time-edit-btn.time-edit-btn-danger', { timeout: 10000 })
           .last()
-          .click({ force: true });
+      .click({ force: true });
       })
 
       // 3) Confirmar "Sí" si aparece
@@ -1144,32 +1144,32 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
 
     return asegurarSesionFichar(casoExcel)
       .then(() => {
-        const casoId = String(casoExcel.caso || '').trim().toUpperCase();
-        const datos = prepararDatosFichaje(casoExcel, casoId);
+      const casoId = String(casoExcel.caso || '').trim().toUpperCase();
+      const datos = prepararDatosFichaje(casoExcel, casoId);
 
-        const mensajeAlertaEntrada = obtenerDatoPorEtiquetas(casoExcel, LABELS_ALERTA_ENTRADA);
-        const mensajeAlertaSalida = obtenerDatoPorEtiquetas(casoExcel, LABELS_ALERTA_SALIDA);
-        const mensajesEntrada = normalizarMensajesEsperados(mensajeAlertaEntrada);
-        const mensajesSalida = normalizarMensajesEsperados(mensajeAlertaSalida);
-        const config = obtenerConfiguracionCasoFichaje(casoId);
+      const mensajeAlertaEntrada = obtenerDatoPorEtiquetas(casoExcel, LABELS_ALERTA_ENTRADA);
+      const mensajeAlertaSalida = obtenerDatoPorEtiquetas(casoExcel, LABELS_ALERTA_SALIDA);
+      const mensajesEntrada = normalizarMensajesEsperados(mensajeAlertaEntrada);
+      const mensajesSalida = normalizarMensajesEsperados(mensajeAlertaSalida);
+      const config = obtenerConfiguracionCasoFichaje(casoId);
 
-        if (!datos.secuencia.length) {
+      if (!datos.secuencia.length) {
           cy.log(' No se encontraron pasos de entrada/salida configurados para este caso.');
-          return cy.wrap(null);
-        }
+        return cy.wrap(null);
+      }
 
-        cy.log(`Secuencia planificada: ${datos.secuencia.map(p => `${p.tipo}:${p.hora || 'sin hora'}`).join(' -> ')}`);
+      cy.log(`Secuencia planificada: ${datos.secuencia.map(p => `${p.tipo}:${p.hora || 'sin hora'}`).join(' -> ')}`);
 
-        let chain = cy.wrap(null);
-        let entradaPendiente = false;
+      let chain = cy.wrap(null);
+      let entradaPendiente = false;
 
-        datos.secuencia.forEach((paso) => {
-          if (paso.tipo === 'entrada') {
-            chain = chain
-              .then(() => rellenarCamposEntrada(paso))
-              .then(() => {
-                cy.log('Pulsando botón "Entrada"');
-                return clickBotonFichaje('entrada')
+      datos.secuencia.forEach((paso) => {
+        if (paso.tipo === 'entrada') {
+          chain = chain
+            .then(() => rellenarCamposEntrada(paso))
+            .then(() => {
+              cy.log('Pulsando botón "Entrada"');
+              return clickBotonFichaje('entrada')
                   .then(() => {
                     return cy.get('body', { timeout: 2000 }).then(($body) => {
                       const texto = $body.text();
@@ -1187,9 +1187,9 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
                                 cy.log('Reintentando registrar entrada después de limpiar...');
                                 return rellenarCamposEntrada(paso)
                                   .then(() => clickBotonFichaje('entrada'))
-                                  .then(() => aceptarAdvertenciaSiExiste({
-                                    mensajeEsperado: mensajesEntrada,
-                                    accion: config.accionAlertaEntrada
+                .then(() => aceptarAdvertenciaSiExiste({
+                  mensajeEsperado: mensajesEntrada,
+                  accion: config.accionAlertaEntrada
                                   }));
                               });
                           });
@@ -1201,58 +1201,58 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
                       });
                     });
                   })
-                  .then(() => {
-                    if (config.accionAlertaEntrada === 'cancelar') {
-                      entradaPendiente = false;
-                      if (config.verificarEntradaNoRegistradaTrasCancelar) {
-                        return asegurarBotonFichajeVisible('entrada');
-                      }
-                      return cy.wrap(null);
-                    }
-
-                    entradaPendiente = true;
-                    return cy.wait(800).then(() => {
-                      if (config.validarEntradaDuplicada) {
-                        return asegurarBotonFichajeNoVisible('entrada');
-                      }
-                      return cy.wrap(null);
-                    });
-                  });
-              });
-          } else if (paso.tipo === 'salida') {
-            chain = chain
-              .then(() => rellenarCamposSalida(paso))
-              .then(() => {
-                if (!entradaPendiente) {
-                  if (config.salidaSinEntrada) {
-                    cy.log('Validando que no exista botón de "Salida" sin entrada previa.');
-                    return asegurarBotonFichajeNoVisible('salida');
-                  }
-                  cy.log(' No hay una entrada previa confirmada; se omite el registro de salida.');
-                  return cy.wrap(null);
-                }
-
-                cy.log(`Esperando ${ESPERA_SALIDA_MS / 1000} segundos antes de registrar la salida`);
-                return cy.wait(ESPERA_SALIDA_MS)
-                  .then(() => {
-                    cy.log('Pulsando botón "Salida"');
-                    return clickBotonFichaje('salida');
-                  })
-                  .then(() => aceptarAdvertenciaSiExiste({
-                    timeout: 4000,
-                    mensajeEsperado: mensajesSalida,
-                    accion: config.accionAlertaSalida
-                  }))
-                  .then(() => {
+                .then(() => {
+                  if (config.accionAlertaEntrada === 'cancelar') {
                     entradaPendiente = false;
-                    return cy.wait(800);
-                  });
-              });
-          }
-        });
+                    if (config.verificarEntradaNoRegistradaTrasCancelar) {
+                      return asegurarBotonFichajeVisible('entrada');
+                    }
+                    return cy.wrap(null);
+                  }
 
-        return chain;
+                  entradaPendiente = true;
+                  return cy.wait(800).then(() => {
+                    if (config.validarEntradaDuplicada) {
+                      return asegurarBotonFichajeNoVisible('entrada');
+                    }
+                    return cy.wrap(null);
+                  });
+                });
+            });
+        } else if (paso.tipo === 'salida') {
+          chain = chain
+            .then(() => rellenarCamposSalida(paso))
+            .then(() => {
+              if (!entradaPendiente) {
+                if (config.salidaSinEntrada) {
+                  cy.log('Validando que no exista botón de "Salida" sin entrada previa.');
+                  return asegurarBotonFichajeNoVisible('salida');
+                }
+                  cy.log(' No hay una entrada previa confirmada; se omite el registro de salida.');
+                return cy.wrap(null);
+              }
+
+              cy.log(`Esperando ${ESPERA_SALIDA_MS / 1000} segundos antes de registrar la salida`);
+              return cy.wait(ESPERA_SALIDA_MS)
+                .then(() => {
+                  cy.log('Pulsando botón "Salida"');
+                  return clickBotonFichaje('salida');
+                })
+                .then(() => aceptarAdvertenciaSiExiste({
+                  timeout: 4000,
+                  mensajeEsperado: mensajesSalida,
+                  accion: config.accionAlertaSalida
+                }))
+                .then(() => {
+                  entradaPendiente = false;
+                  return cy.wait(800);
+                });
+            });
+        }
       });
+
+      return chain;
+    });
   }
   // ────────────────────────────────
   // Edición directa del bloque Trabajo para TC024–TC027
@@ -1550,8 +1550,8 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
             const $target = $visibles.length ? $visibles.first() : $btns.first();
 
             cy.wrap($target).click({ force: true });
-          });
         });
+    });
     })
       // 5.1 Si aparece otra vez el modal de "Editar entrada/salida" tras Aceptar, pulsar "Sí" y NO hacer más
       .then(() => {

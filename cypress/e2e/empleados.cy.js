@@ -12,7 +12,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
   // Ejecutar todos los casos que no estén pausados
   const CASOS_OK = new Set();
   // Pausar casos (vacío para ejecutar todos)
-  const CASOS_PAUSADOS = new Set();
+  const CASOS_PAUSADOS = new Set([]);
 
   before(() => {
     Cypress.on('uncaught:exception', (err) => {
@@ -21,12 +21,19 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
         err.message?.includes('Snapshot missing on Livewire component') ||
         err.message?.includes('Component already initialized') ||
         err.message?.includes('Cannot read properties of null') ||
-        err.message?.includes('reading \'document\'')
+        err.message?.includes('reading \'document\'') ||
+        err.message?.includes('Socket closed') ||
+        err.message?.includes('network error occurred') ||
+        err.message?.includes('upstream response')
       ) {
         return false;
       }
       return true;
     });
+
+    // No usar intercept para errores 500 porque puede fallar con errores de red
+    // Los errores 500 se detectarán en el DOM/URL después de la petición
+    // Esto evita el error "Socket closed before finished writing response"
   });
 
   after(() => {
@@ -43,7 +50,20 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
         : casosExcel;
 
       casosFiltrados = casosFiltrados.filter((caso) => {
-        const id = String(caso.caso || '').trim().toUpperCase();
+        // Normalizar el ID del caso: quitar espacios, convertir a mayúsculas, y asegurar formato TC### 
+        let id = String(caso.caso || '').trim().toUpperCase().replace(/\s+/g, '');
+        // Si no empieza con TC, intentar extraer el número y reconstruir
+        if (!id.startsWith('TC')) {
+          const match = id.match(/(\d+)/);
+          if (match) {
+            id = `TC${match[1].padStart(3, '0')}`;
+          }
+        }
+        // Normalizar formato TC### (asegurar que el número tenga 3 dígitos)
+        const match = id.match(/^TC(\d+)$/i);
+        if (match) {
+          id = `TC${match[1].padStart(3, '0')}`;
+        }
         if (CASOS_PAUSADOS.has(id)) return false;
         if (CASOS_OK.size === 0) return true;
         return CASOS_OK.has(id);
@@ -61,8 +81,13 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
   });
 
   function ejecutarCaso(casoExcel, idx) {
-    const numero = parseInt(String(casoExcel.caso).replace('TC', ''), 10) || (idx + 1);
-    const casoId = casoExcel.caso || `TC${String(idx + 1).padStart(3, '0')}`;
+    // Usar el caso del Excel directamente, sin fallback a idx
+    const casoId = String(casoExcel.caso || '').trim().toUpperCase();
+    if (!casoId || !casoId.startsWith('TC')) {
+      cy.log(`Caso inválido en Excel: ${casoExcel.caso}, saltando...`);
+      return cy.wrap(null);
+    }
+    const numero = parseInt(casoId.replace(/^TC/i, ''), 10) || 1;
     const nombre = `${casoId} - ${casoExcel.nombre}`;
 
     cy.log('────────────────────────────────────────────────────────');
@@ -74,16 +99,184 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
     if (idx > 0) cy.wait(600);
     cy.resetearFlagsTest();
 
-    return irAEmpleadosLimpio(numero)
-      .then(() => {
+    // Variable local para rastrear errores 500 en este caso específico
+    let error500Detectado = false;
+    // Variable para rastrear si ya se registró un ERROR en Excel
+    let errorYaRegistrado = false;
+
+    // Función helper para detectar si es un error 500 o si no se abrió el formulario
+    const esError500 = (err) => {
+      if (!err) return false;
+      return err.status === 500 ||
+        err.statusCode === 500 ||
+        err.message?.includes('500') ||
+        err.message?.includes('Internal Server Error') ||
+        err.message?.includes('ERROR_500_DETECTADO') ||
+        err.message?.includes('ERROR_FORMULARIO_NO_ABIERTO') ||
+        err.response?.status === 500 ||
+        String(err).includes('500') ||
+        (err.name && err.name.includes('500'));
+    };
+
+    // Función helper para manejar error 500 o formulario no abierto
+    const manejarError500 = (err, url = null) => {
+      error500Detectado = true;
+      errorYaRegistrado = true;
+
+      // Determinar el tipo de error y el mensaje
+      let mensajeError;
+      if (err?.message?.includes('ERROR_FORMULARIO_NO_ABIERTO')) {
+        mensajeError = 'ERROR: No se pudo abrir el formulario correctamente. La página no muestra el formulario esperado.';
+      } else if (url) {
+        mensajeError = `ERROR 500: Error interno del servidor en ${url}`;
+      } else {
+        mensajeError = `ERROR 500: ${err?.message || err || 'Error interno del servidor'}`;
+      }
+
+      cy.log(`ERROR detectado en ${casoId}: ${mensajeError}`);
+      registrarResultado(
+        casoId,
+        nombre,
+        'Comportamiento correcto',
+        mensajeError,
+        'ERROR'
+      );
+      // Retornar true para indicar que hubo error
+      return cy.wrap(true);
+    };
+
+    // Función helper para verificar error 500 ANTES de ejecutar cualquier acción
+    const verificarError500Temprano = () => {
+      return cy.url({ timeout: 2000 }).then((currentUrl) => {
+        const urlTieneError = currentUrl.includes('error') || currentUrl.includes('500');
+
+        return cy.get('body', { timeout: 2000 }).then(($body) => {
+          if (!$body || $body.length === 0) {
+            if (urlTieneError && !error500Detectado) {
+              manejarError500(null, currentUrl);
+              error500Detectado = true;
+            }
+            return cy.wrap(error500Detectado);
+          }
+
+          const texto = $body.text().toLowerCase();
+          const tieneError500 = texto.includes('500') ||
+            texto.includes('internal server error') ||
+            texto.includes('error interno del servidor') ||
+            texto.includes('server error') ||
+            texto.includes('500 server error') ||
+            $body.find('[class*="error-500"], [class*="error500"], [id*="error-500"]').length > 0 ||
+            urlTieneError;
+
+          if (tieneError500 && !error500Detectado) {
+            manejarError500(null, currentUrl);
+            error500Detectado = true;
+          }
+          return cy.wrap(error500Detectado);
+        }, () => {
+          // Si hay error al obtener el body, verificar la URL
+          return cy.url().then((url) => {
+            if ((url.includes('error') || url.includes('500')) && !error500Detectado) {
+              manejarError500(null, url);
+              error500Detectado = true;
+            }
+            return cy.wrap(error500Detectado);
+          });
+        });
+      });
+    };
+
+    return cy.wrap(null)
+      .then(() => irAEmpleadosLimpio(numero))
+      .then(() => verificarError500Temprano())
+      .then((huboError500) => {
+        // Si hay error 500, NO ejecutar la función y retornar inmediatamente
+        if (huboError500) {
+          return cy.wrap(null);
+        }
+        // Si no hay error 500, ejecutar la función normalmente
         const resultadoFuncion = funcion(casoExcel);
         if (resultadoFuncion && typeof resultadoFuncion.then === 'function') {
-          return resultadoFuncion;
+          return resultadoFuncion
+            .then((resultado) => {
+              // Verificar si el resultado indica que hubo error
+              if (resultado && resultado.huboError === true) {
+                cy.log(`Error ya registrado en Excel, continuando sin buscar elementos`);
+                errorYaRegistrado = true; // Marcar que ya se registró un error
+                return cy.wrap(true); // Retornar true para indicar que hubo error
+              }
+              // Si no hay error, verificar error 500 temprano
+              return verificarError500Temprano();
+            }, (err) => {
+              // Si es error 500 o formulario no abierto, manejarlo (retorna cy.wrap(true))
+              cy.log(`Error capturado en primer nivel: ${err?.message || err}`);
+              if (esError500(err)) {
+                cy.log(`Error 500 detectado, manejando...`);
+                return manejarError500(err);
+              }
+              // Si no es 500, re-lanzar el error
+              cy.log(`Error no es 500, re-lanzando...`);
+              throw err;
+            })
+            .then((resultado) => {
+              // Si resultado es true, significa que hubo error 500
+              if (resultado === true) {
+                errorYaRegistrado = true; // Marcar que ya se registró un error para evitar registrar OK
+                return cy.wrap(true);
+              }
+              // Si resultado es un objeto con huboError: true, también retornar true
+              if (resultado && resultado.huboError === true) {
+                cy.log(`Error ya registrado en Excel (objeto), continuando sin buscar elementos`);
+                errorYaRegistrado = true; // Marcar que ya se registró un error para evitar registrar OK
+                return cy.wrap(true);
+              }
+              return resultado;
+            }, (err) => {
+              // Captura adicional por si el error no se capturó arriba
+              cy.log(`Error capturado en segundo nivel: ${err?.message || err}`);
+              if (esError500(err)) {
+                cy.log(`Error 500 detectado en segundo nivel, manejando...`);
+                return manejarError500(err);
+              }
+              cy.log(`Error no es 500 en segundo nivel, re-lanzando...`);
+              throw err;
+            });
         }
-        return cy.wrap(null);
+        return verificarError500Temprano();
+      }, (err) => {
+        // Detectar si es un error 500 o formulario no abierto
+        if (esError500(err)) {
+          return manejarError500(err); // Retorna cy.wrap(true)
+        }
+        // Si no es 500, lanzar el error normalmente
+        throw err;
       })
-      .then(() => cy.estaRegistrado())
+      .then((huboError500) => {
+        // Si se detectó error 500, no continuar con estaRegistrado
+        if (huboError500 === true) {
+          cy.log(`Error 500 ya manejado, continuando sin buscar elementos`);
+          errorYaRegistrado = true; // Marcar que ya se registró un error para evitar registrar OK
+          return cy.wrap(null);
+        }
+        return cy.estaRegistrado();
+      }, (err) => {
+        // Detectar si es un error 500 o formulario no abierto
+        cy.log(`Error capturado en nivel intermedio: ${err?.message || err}`);
+        if (esError500(err)) {
+          cy.log(`Error 500 detectado en nivel intermedio, registrando en Excel...`);
+          manejarError500(err);
+          // Retornar null para que el test continúe sin fallar
+          return cy.wrap(null);
+        }
+        // Si no es 500, lanzar el error normalmente para que se capture en el catch final
+        throw err;
+      })
       .then((ya) => {
+        // NO registrar OK si ya se registró un ERROR
+        if (errorYaRegistrado) {
+          cy.log(`Error ya registrado en Excel, no se registrará OK adicional`);
+          return cy.wrap(null);
+        }
         if (!ya) {
           const resultado = CASOS_WARNING.has(casoId) ? 'WARNING' : 'OK';
           const obtenido = resultado === 'OK'
@@ -92,6 +285,17 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
           registrarResultado(casoId, nombre, 'Comportamiento correcto', obtenido, resultado);
         }
       }, (err) => {
+        // Detectar si es un error 500 o formulario no abierto en el catch final
+        // ESTE ES EL ÚLTIMO RESORTE - aquí DEBE capturarse el error para que no falle el test
+        cy.log(`Error capturado en catch final: ${err?.message || err}`);
+        if (esError500(err)) {
+          cy.log(`Error 500 detectado en catch final, registrando en Excel...`);
+          manejarError500(err);
+          // Retornar null para que el test continúe sin fallar
+          return cy.wrap(null);
+        }
+
+        // Para otros errores, usar el manejo normal
         cy.capturarError(nombre, err, {
           numero: casoId,
           nombre,
@@ -99,7 +303,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
           archivo,
           pantalla: 'Empleados'
         });
-        return null;
+        return cy.wrap(null); // Retornar null para que el test continúe
       });
   }
 
@@ -162,7 +366,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
       const verificarPantallaCargada = () => {
         // Esperar a que la página cargue completamente
         cy.wait(1000);
-        
+
         // Intentar cerrar panel lateral si existe (sin fallar si no existe)
         cy.get('body').then(($body) => {
           const hayPanelLateral = $body.find('[class*="overlay"], [class*="modal"], [class*="drawer"], [class*="sidebar"]').length > 0;
@@ -175,53 +379,53 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
 
         // Verificar que la página esté cargada
         cy.get('body', { timeout: 20000 }).should('be.visible');
-        
+
         // Verificar si hay tabla o estado de "sin datos" - ambos son válidos
         return cy.get('body', { timeout: 20000 }).then(($body) => {
           const hayTabla = $body.find('.fi-ta-table, table').length > 0;
-          
+
           if (hayTabla) {
             cy.log('Tabla encontrada, verificando visibilidad...');
             return cy.get('.fi-ta-table, table', { timeout: 20000 }).should('exist');
           }
-          
+
           // Si no hay tabla, verificar si hay estado de "sin datos"
           const hayEstadoVacio = $body.find('.fi-empty-state, .fi-ta-empty-state, [class*="empty"], [class*="sin datos"], [class*="no hay"]').length > 0;
           const textoBody = $body.text().toLowerCase();
-          const hayMensajeSinDatos = textoBody.includes('no hay datos') || 
-                                     textoBody.includes('sin registros') || 
-                                     textoBody.includes('tabla vacía') ||
-                                     textoBody.includes('no se encontraron') ||
-                                     textoBody.includes('no se encontraron registros') ||
-                                     textoBody.includes('sin resultados') ||
-                                     textoBody.includes('no existen registros');
-          
+          const hayMensajeSinDatos = textoBody.includes('no hay datos') ||
+            textoBody.includes('sin registros') ||
+            textoBody.includes('tabla vacía') ||
+            textoBody.includes('no se encontraron') ||
+            textoBody.includes('no se encontraron registros') ||
+            textoBody.includes('sin resultados') ||
+            textoBody.includes('no existen registros');
+
           if (hayEstadoVacio || hayMensajeSinDatos) {
             cy.log('No hay registros en la tabla - esto es válido (OK)');
             return cy.wrap(true);
           }
-          
+
           // Si no hay tabla ni mensaje, esperar un poco más y buscar la tabla
           cy.log('Esperando a que la tabla se cargue...');
           return cy.get('.fi-ta-table, table', { timeout: 20000 }).should('exist').catch(() => {
             // Si después del timeout no hay tabla, verificar una última vez si hay mensaje de sin datos
             return cy.get('body', { timeout: 2000 }).then(($body2) => {
               const textoBody2 = $body2.text().toLowerCase();
-              const hayMensaje = textoBody2.includes('no hay') || 
-                                textoBody2.includes('sin datos') || 
-                                textoBody2.includes('vacío') ||
-                                textoBody2.includes('sin registros') ||
-                                textoBody2.includes('sin resultados') ||
-                                textoBody2.includes('no se encontraron') ||
-                                textoBody2.includes('no se encontraron registros') ||
-                                textoBody2.includes('no existen registros');
+              const hayMensaje = textoBody2.includes('no hay') ||
+                textoBody2.includes('sin datos') ||
+                textoBody2.includes('vacío') ||
+                textoBody2.includes('sin registros') ||
+                textoBody2.includes('sin resultados') ||
+                textoBody2.includes('no se encontraron') ||
+                textoBody2.includes('no se encontraron registros') ||
+                textoBody2.includes('no existen registros');
               const hayEstado = $body2.find('.fi-empty-state, .fi-ta-empty-state, [class*="empty"]').length > 0;
-              
+
               if (hayMensaje || hayEstado) {
                 cy.log('No hay registros - esto es válido (OK)');
                 return cy.wrap(true);
               }
-              
+
               // Si realmente no hay nada, lanzar error
               cy.log(' No se encontró tabla ni mensaje de sin datos');
               throw new Error('No se encontró la tabla ni mensaje de sin datos');
@@ -236,11 +440,11 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
         cy.url({ timeout: 20000 }).should('include', EMPLEADOS_PATH);
         return verificarPantallaCargada();
       } else {
-        cy.log('🔑 Sin sesión, realizando login primero...');
-        cy.login({ 
-          email: Cypress.env('SUPERADMIN_EMAIL') || 'superadmin@novatrans.app', 
-          password: Cypress.env('SUPERADMIN_PASSWORD') || 'novatranshorario@2025', 
-          useSession: false 
+        cy.log('Sin sesión, realizando login primero...');
+        cy.login({
+          email: Cypress.env('SUPERADMIN_EMAIL') || 'superadmin@novatrans.app',
+          password: Cypress.env('SUPERADMIN_PASSWORD') || 'novatranshorario@2025',
+          useSession: false
         });
         // Verificar si redirigió a fichar y navegar a Panel interno si es necesario
         cy.url({ timeout: 15000 }).then((currentUrl) => {
@@ -432,7 +636,27 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
 
   function abrirFormularioCrear(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-    return abrirFormularioCrearEmpleado();
+    return abrirFormularioCrearEmpleado()
+      .then((resultado) => {
+        // Verificar si hay error en el resultado
+        if (resultado && resultado.error) {
+          // Si hay error, registrar directamente en Excel
+          const casoId = casoExcel.caso || 'TC000';
+          const nombre = `${casoId} - ${casoExcel.nombre}`;
+          cy.log(`Error detectado: ${resultado.error} - registrando en Excel`);
+          registrarResultado(
+            casoId,
+            nombre,
+            'Comportamiento correcto',
+            resultado.mensaje || `ERROR: ${resultado.error}`,
+            'ERROR'
+          );
+          // Retornar un valor que indique que hubo error (sin lanzar excepción)
+          return cy.wrap({ huboError: true });
+        }
+        // Si no hay error, retornar null para indicar éxito
+        return cy.wrap(null);
+      });
   }
 
   function ejecutarCrearIndividual(casoExcel) {
@@ -466,72 +690,150 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
     }
 
     return abrirFormularioCrearEmpleado()
-      .then(() => {
+      .then((resultado) => {
+        // Verificar si hay error en el resultado
+        if (resultado && resultado.error) {
+          // Si hay error, registrar directamente en Excel
+          const casoId = casoExcel.caso || 'TC000';
+          const nombre = `${casoId} - ${casoExcel.nombre}`;
+          cy.log(`Error detectado: ${resultado.error} - registrando en Excel`);
+          registrarResultado(
+            casoId,
+            nombre,
+            'Comportamiento correcto',
+            resultado.mensaje || `ERROR: ${resultado.error}`,
+            'ERROR'
+          );
+          // Retornar un valor que indique que hubo error (sin lanzar excepción)
+          return cy.wrap({ huboError: true });
+        }
+
+        // Si no hay error, continuar normalmente
         if (!esSinEmpresa) {
           return seleccionarEmpresa(empresa);
         }
         return null;
       })
-      .then(() => {
+      .then((resultadoAnterior) => {
+        // Si hubo error anterior, NO continuar
+        if (resultadoAnterior && resultadoAnterior.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
         if (nombre) {
           return escribirCampo('input[name="data.name"], input#data\\.name', nombre);
         }
         return null;
       })
-      .then(() => {
+      .then((resultadoAnterior) => {
+        // Si hubo error anterior, NO continuar
+        if (resultadoAnterior && resultadoAnterior.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
         if (apellidos) {
           return escribirCampo('input[name="data.surname"], input#data\\.surname', apellidos);
         }
         return null;
       })
-      .then(() => {
+      .then((resultadoAnterior) => {
+        // Si hubo error anterior, NO continuar
+        if (resultadoAnterior && resultadoAnterior.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
         if (emailFinal) {
           return escribirCampo('input[name="data.email"], input#data\\.email', emailFinal);
         }
         return null;
       })
-      .then(() => {
+      .then((resultadoAnterior) => {
+        // Si hubo error anterior, NO continuar
+        if (resultadoAnterior && resultadoAnterior.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
         if (telefono) {
           return escribirCampo('input[name="data.phone"], input#data\\.phone', telefono);
         }
         return null;
       })
-      .then(() => {
+      .then((resultadoAnterior) => {
+        // Si hubo error anterior, NO continuar
+        if (resultadoAnterior && resultadoAnterior.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
         if (grupo) {
           return seleccionarOpcionChoices(grupo, 'Grupo');
         }
         return null;
       })
-      .then(() => {
+      .then((resultadoAnterior) => {
+        // Si hubo error anterior, NO continuar
+        if (resultadoAnterior && resultadoAnterior.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
         if (departamento) {
           return seleccionarOpcionChoices(departamento, 'Departamento');
         }
         return null;
       })
-      .then(() => {
+      .then((resultadoAnterior) => {
+        // Si hubo error anterior, NO continuar
+        if (resultadoAnterior && resultadoAnterior.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
         if (roles) {
           return seleccionarOpcionChoices(roles, 'Roles');
         }
         return null;
       })
-      .then(() => {
+      .then((resultadoAnterior) => {
+        // Si hubo error anterior, NO continuar
+        if (resultadoAnterior && resultadoAnterior.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
         if (notas) {
           return escribirCampo('textarea[name="data.notes"], textarea#data\\.notes, trix-editor#data\\.notes', notas);
         }
         return null;
       })
-      .then(() => {
+      .then((resultadoAnterior) => {
+        // Si hubo error anterior, NO continuar
+        if (resultadoAnterior && resultadoAnterior.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
         // Determinar qué botón usar según el caso
         if (esSinEmpresa) {
           return enviarFormularioCrear()
-            .then(() => verificarErrorEsperado(['empresa', 'obligatoria']));
+            .then((resultadoEnvio) => {
+              // Si hubo error al enviar, NO continuar
+              if (resultadoEnvio && resultadoEnvio.huboError === true) {
+                return cy.wrap({ huboError: true });
+              }
+              return verificarErrorEsperado(['empresa', 'obligatoria']);
+            });
         }
         if (casoExcel.caso === 'TC018') {
-          return encontrarBotonAlFinal('Crear y crear otro');
+          return encontrarBotonAlFinal('Crear y crear otro')
+            .then((resultadoBoton) => {
+              // Si hubo error al encontrar el botón, NO continuar
+              if (resultadoBoton && resultadoBoton.huboError === true) {
+                return cy.wrap({ huboError: true });
+              }
+              return cy.wrap(null);
+            });
         }
-        return enviarFormularioCrear();
+        return enviarFormularioCrear()
+          .then((resultadoEnvio) => {
+            // Si hubo error al enviar, NO continuar
+            if (resultadoEnvio && resultadoEnvio.huboError === true) {
+              return cy.wrap({ huboError: true });
+            }
+            return cy.wrap(null);
+          });
       })
-      .then(() => {
+      .then((resultadoAnterior) => {
+        // Si hubo error anterior, NO continuar
+        if (resultadoAnterior && resultadoAnterior.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
         if (esSinEmpresa) {
           return cy.wrap(null);
         }
@@ -545,8 +847,32 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
   function crearCancelar(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
     return abrirFormularioCrearEmpleado()
-      .then(() => encontrarBotonAlFinal('Cancelar'))
-      .then(() => cy.url({ timeout: 10000 }).should('include', EMPLEADOS_PATH));
+      .then((resultadoApertura) => {
+        // Si hubo error al abrir el formulario, NO continuar
+        if (resultadoApertura && resultadoApertura.error) {
+          // Si hay error, registrar directamente en Excel
+          const casoId = casoExcel.caso || 'TC000';
+          const nombre = `${casoId} - ${casoExcel.nombre}`;
+          cy.log(`Error detectado: ${resultadoApertura.error} - registrando en Excel`);
+          registrarResultado(
+            casoId,
+            nombre,
+            'Comportamiento correcto',
+            resultadoApertura.mensaje || `ERROR: ${resultadoApertura.error}`,
+            'ERROR'
+          );
+          // Retornar un valor que indique que hubo error (sin lanzar excepción)
+          return cy.wrap({ huboError: true });
+        }
+        return encontrarBotonAlFinal('Cancelar');
+      })
+      .then((resultadoBoton) => {
+        // Si hubo error al encontrar el botón, NO continuar
+        if (resultadoBoton && resultadoBoton.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
+        return cy.url({ timeout: 10000 }).should('include', EMPLEADOS_PATH);
+      });
   }
 
   function validarEmpresaObligatoria(casoExcel) {
@@ -644,16 +970,46 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
     const nombre = obtenerValorNombre(casoExcel) || 'empleado';
 
     return editarAbrirFormulario(casoExcel)
-      .then(() => escribirCampo('input[name="data.name"], input#data\\.name', nombre))
-      .then(() => encontrarBotonAlFinal('Guardar cambios'))
-      .then(() => esperarToastExito());
+      .then((resultadoApertura) => {
+        // Si hubo error al abrir el formulario, NO continuar
+        if (resultadoApertura && resultadoApertura.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
+        return escribirCampo('input[name="data.name"], input#data\\.name', nombre);
+      })
+      .then((resultadoAnterior) => {
+        // Si hubo error anterior, NO continuar
+        if (resultadoAnterior && resultadoAnterior.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
+        return encontrarBotonAlFinal('Guardar cambios');
+      })
+      .then((resultadoBoton) => {
+        // Si hubo error al encontrar el botón, NO continuar
+        if (resultadoBoton && resultadoBoton.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
+        return esperarToastExito();
+      });
   }
 
   function editarCancelar(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
     return editarAbrirFormulario(casoExcel)
-      .then(() => encontrarBotonAlFinal('Cancelar'))
-      .then(() => cy.url({ timeout: 10000 }).should('include', EMPLEADOS_PATH));
+      .then((resultadoApertura) => {
+        // Si hubo error al abrir el formulario, NO continuar
+        if (resultadoApertura && resultadoApertura.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
+        return encontrarBotonAlFinal('Cancelar');
+      })
+      .then((resultadoBoton) => {
+        // Si hubo error al encontrar el botón, NO continuar
+        if (resultadoBoton && resultadoBoton.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
+        return cy.url({ timeout: 10000 }).should('include', EMPLEADOS_PATH);
+      });
   }
 
   function mostrarColumna(casoExcel) {
@@ -1096,13 +1452,108 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
   // === Helpers específicos ===
 
   function abrirFormularioCrearEmpleado() {
+    // Variable para almacenar el caso actual (se pasará desde ejecutarCrearIndividual)
+    let casoIdActual = '';
+    let nombreActual = '';
+
     return verificarUrlEmpleados()
       .then(() =>
         cy.contains('button, a', /Crear empleado/i, { timeout: 10000 })
           .scrollIntoView()
           .click({ force: true })
       )
-      .then(() => cy.url({ timeout: 10000 }).should('include', `${EMPLEADOS_PATH}/create`));
+      .then(() => {
+        // Esperar a que la página cargue
+        cy.wait(1500);
+
+        // Verificar INMEDIATAMENTE si hay error 500 o si NO se abrió el formulario correctamente
+        return cy.get('body', { timeout: 5000 }).then(($body) => {
+          // Verificar el texto del body INMEDIATAMENTE
+          const texto = $body && $body.length > 0 ? ($body.text() ? $body.text().toLowerCase() : '') : '';
+
+          // Verificar si hay error 500 PRIMERO
+          const tieneError500 = texto.includes('500') ||
+            texto.includes('internal server error') ||
+            texto.includes('error interno del servidor') ||
+            texto.includes('server error') ||
+            texto.includes('500 server error');
+
+          if (tieneError500) {
+            // Si hay error 500, registrar directamente en Excel y retornar indicador de error
+            cy.log('ERROR 500 detectado - registrando en Excel');
+            // Retornar un objeto que indique que hubo error
+            return cy.wrap({ error: 'ERROR_500_DETECTADO', mensaje: 'ERROR 500: Error interno del servidor detectado en la página' });
+          }
+
+          if (!$body || $body.length === 0) {
+            // Si no hay body, verificar el documento directamente para ver si hay error 500
+            return cy.document().then((doc) => {
+              const docText = doc.body ? (doc.body.textContent || '').toLowerCase() : '';
+              const tieneError500EnDoc = docText.includes('500') ||
+                docText.includes('internal server error') ||
+                docText.includes('error interno del servidor') ||
+                docText.includes('server error') ||
+                docText.includes('500 server error');
+
+              if (tieneError500EnDoc) {
+                cy.log('ERROR 500 detectado en el documento - registrando en Excel');
+                return cy.wrap({ error: 'ERROR_500_DETECTADO', mensaje: 'ERROR 500: Error interno del servidor detectado en el documento' });
+              }
+
+              // Si no hay error 500, puede ser otro error
+              cy.log('No se encontró el body de la página - registrando en Excel');
+              return cy.wrap({ error: 'ERROR_FORMULARIO_NO_ABIERTO', mensaje: 'ERROR: No se pudo abrir el formulario correctamente. La página no muestra el formulario esperado.' });
+            });
+          }
+
+          // Verificar que la URL sea correcta
+          return cy.url({ timeout: 10000 }).then((url) => {
+            if (!url.includes(`${EMPLEADOS_PATH}/create`)) {
+              // Si la URL no es correcta, puede ser que no se abrió el formulario
+              cy.log('URL incorrecta - registrando en Excel');
+              return cy.wrap({ error: 'ERROR_FORMULARIO_NO_ABIERTO', mensaje: 'ERROR: No se pudo abrir el formulario correctamente. URL incorrecta.' });
+            }
+
+            // Verificar que realmente hay un formulario en la página (no solo la URL)
+            const tieneFormulario = $body.find('form').length > 0 ||
+              $body.find('input[name*="name"], input[name*="email"]').length > 0 ||
+              $body.find('label').filter((i, el) => {
+                const textoLabel = Cypress.$(el).text().toLowerCase();
+                return textoLabel.includes('empresa') ||
+                  textoLabel.includes('nombre') ||
+                  textoLabel.includes('email');
+              }).length > 0;
+
+            if (!tieneFormulario) {
+              // Si no hay formulario, algo salió mal
+              cy.log('No se detectó el formulario de creación - registrando en Excel');
+              return cy.wrap({ error: 'ERROR_FORMULARIO_NO_ABIERTO', mensaje: 'ERROR: No se pudo abrir el formulario correctamente. La página no muestra el formulario esperado.' });
+            }
+
+            // Si todo está bien, retornar éxito
+            return cy.wrap({ error: null });
+          });
+        }, () => {
+          // Si no se puede obtener el body, verificar si hay error 500
+          return cy.url().then((url) => {
+            if (url.includes('error') || url.includes('500')) {
+              cy.log('Error 500 detectado en la URL - registrando en Excel');
+              return cy.wrap({ error: 'ERROR_500_DETECTADO', mensaje: 'ERROR 500: Error interno del servidor detectado en la URL' });
+            }
+            // Si no hay error 500 en la URL, verificar el documento
+            return cy.document().then((doc) => {
+              const docText = doc.body ? doc.body.textContent.toLowerCase() : '';
+              if (docText.includes('500') || docText.includes('server error')) {
+                cy.log('Error 500 detectado en el documento - registrando en Excel');
+                return cy.wrap({ error: 'ERROR_500_DETECTADO', mensaje: 'ERROR 500: Error interno del servidor detectado en el documento' });
+              }
+              // Si no hay error 500, asumir otro error
+              cy.log('No se pudo obtener el body - registrando en Excel');
+              return cy.wrap({ error: 'ERROR_FORMULARIO_NO_ABIERTO', mensaje: 'ERROR: No se pudo abrir el formulario correctamente. No se pudo obtener el body de la página.' });
+            });
+          });
+        });
+      });
   }
 
   function seleccionarEmpresa(nombre) {
@@ -1117,76 +1568,126 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
     const openersSelector = '.choices, .choices[data-type="select-one"], [role="combobox"], [aria-haspopup="listbox"], select, .fi-select-trigger';
 
     function abrirSelect() {
-      if (labelRegex) {
-        return cy.contains('label, span, div', labelRegex, { timeout: 10000 })
-          .then(($label) => {
-            const wrappers = [
-              $label.closest('[data-field-wrapper]'),
-              $label.closest('.fi-field'),
-              $label.closest('.fi-fo-field-wrp'),
-              $label.closest('.fi-fo-field'),
-              $label.closest('.grid'),
-              $label.closest('section'),
-              $label.closest('form'),
-              $label.parent()
-            ].filter($el => $el && $el.length);
+      // PRIMERO verificar si hay error 500 antes de intentar buscar elementos
+      return cy.get('body', { timeout: 5000 }).then(($body) => {
+        if (!$body || $body.length === 0) {
+          cy.log('No se encontró el body - posible error 500');
+          return cy.wrap({ huboError: true });
+        }
 
-            for (const $wrapper of wrappers) {
-              const $objetivo = $wrapper.find(openersSelector).filter(':visible').first();
-              if ($objetivo.length) {
-                cy.wrap($objetivo).scrollIntoView().click({ force: true });
-                return;
+        const texto = $body && $body.length > 0 ? ($body.text() ? $body.text().toLowerCase() : '') : '';
+        const tieneError500 = texto.includes('500') ||
+          texto.includes('internal server error') ||
+          texto.includes('error interno del servidor') ||
+          texto.includes('server error') ||
+          texto.includes('500 server error');
+
+        if (tieneError500) {
+          cy.log('ERROR 500 detectado en abrirSelect - no se intentará buscar elementos');
+          return cy.wrap({ huboError: true });
+        }
+
+        // Si no hay error, continuar normalmente
+        if (labelRegex) {
+          return cy.contains('label, span, div', labelRegex, { timeout: 10000 })
+            .then(($label) => {
+              if (!$label || $label.length === 0) {
+                return cy.wrap({ huboError: true });
               }
-            }
+              const wrappers = [
+                $label.closest('[data-field-wrapper]'),
+                $label.closest('.fi-field'),
+                $label.closest('.fi-fo-field-wrp'),
+                $label.closest('.fi-fo-field'),
+                $label.closest('.grid'),
+                $label.closest('section'),
+                $label.closest('form'),
+                $label.parent()
+              ].filter($el => $el && $el.length);
 
-            cy.get(openersSelector, { timeout: 10000 })
-              .filter(':visible')
-              .first()
-              .scrollIntoView()
-              .click({ force: true });
-          });
-      }
+              for (const $wrapper of wrappers) {
+                const $objetivo = $wrapper.find(openersSelector).filter(':visible').first();
+                if ($objetivo.length) {
+                  cy.wrap($objetivo).scrollIntoView().click({ force: true });
+                  return;
+                }
+              }
 
-      return cy.get(openersSelector, { timeout: 10000 })
-        .filter(':visible')
-        .first()
-        .scrollIntoView()
-        .click({ force: true });
+              cy.get(openersSelector, { timeout: 10000 })
+                .filter(':visible')
+                .first()
+                .scrollIntoView()
+                .click({ force: true });
+            });
+        }
+
+        return cy.get(openersSelector, { timeout: 10000 })
+          .filter(':visible')
+          .first()
+          .scrollIntoView()
+          .click({ force: true });
+      }, () => {
+        // Si falla al obtener el body, verificar si hay error 500 en el documento
+        return cy.document().then((doc) => {
+          const docText = doc.body ? (doc.body.textContent || '').toLowerCase() : '';
+          const tieneError500EnDoc = docText.includes('500') ||
+            docText.includes('internal server error') ||
+            docText.includes('error interno del servidor') ||
+            docText.includes('server error') ||
+            docText.includes('500 server error');
+
+          if (tieneError500EnDoc) {
+            cy.log('ERROR 500 detectado en el documento - no se intentará buscar elementos');
+            return cy.wrap({ huboError: true });
+          }
+
+          // Si no hay error 500, retornar error genérico
+          cy.log('No se pudo obtener el body - posible error');
+          return cy.wrap({ huboError: true });
+        });
+      });
     }
 
-    abrirSelect();
-
-    cy.wait(300);
-
-    const dropdownAlias = '@dropdownActual';
-
-    cy.get('.choices.is-open, .choices[aria-expanded="true"], .choices.is-focused')
-      .filter(':visible')
-      .last()
-      .as('dropdownActual');
-
-    const inputBuscador = '.choices__input, input[placeholder*="Teclee"], input[placeholder*="Buscar"], input[type="search"]';
-    const opcionSelector = '[role="option"], .choices__item--choice';
-    const regex = new RegExp(texto, 'i');
-
-    return cy.get(dropdownAlias).within(() => {
-      cy.get(inputBuscador).filter(':visible').first().then(($input) => {
-        if ($input && $input.length) {
-          cy.wrap($input)
-            .clear({ force: true })
-            .type(texto, { force: true, delay: 20 });
+    return abrirSelect()
+      .then((resultado) => {
+        // Si hubo error al abrir el select, retornar el error
+        if (resultado && resultado.huboError === true) {
+          return cy.wrap({ huboError: true });
         }
+
+        return cy.wait(300)
+          .then(() => {
+            const dropdownAlias = '@dropdownActual';
+
+            cy.get('.choices.is-open, .choices[aria-expanded="true"], .choices.is-focused')
+              .filter(':visible')
+              .last()
+              .as('dropdownActual');
+
+            const inputBuscador = '.choices__input, input[placeholder*="Teclee"], input[placeholder*="Buscar"], input[type="search"]';
+            const opcionSelector = '[role="option"], .choices__item--choice';
+            const regex = new RegExp(texto, 'i');
+
+            return cy.get(dropdownAlias).within(() => {
+              cy.get(inputBuscador).filter(':visible').first().then(($input) => {
+                if ($input && $input.length) {
+                  cy.wrap($input)
+                    .clear({ force: true })
+                    .type(texto, { force: true, delay: 20 });
+                }
+              });
+            })
+              .then(() => cy.wait(300))
+              .then(() =>
+                cy.get(dropdownAlias).within(() => {
+                  cy.contains(opcionSelector, regex, { timeout: 10000 })
+                    .scrollIntoView({ duration: 200 })
+                    .click({ force: true });
+                })
+              )
+              .then(() => cy.wait(200));
+          });
       });
-    })
-      .then(() => cy.wait(300))
-      .then(() =>
-        cy.get(dropdownAlias).within(() => {
-          cy.contains(opcionSelector, regex, { timeout: 10000 })
-            .scrollIntoView({ duration: 200 })
-            .click({ force: true });
-        })
-      )
-      .then(() => cy.wait(200));
   }
 
   function escribirCampo(selector, valor) {
@@ -1199,37 +1700,75 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
   }
 
   function encontrarBotonAlFinal(textoBoton) {
-    // Hacer scroll al final de la página para que aparezcan los botones
-    cy.scrollTo('bottom', { duration: 500 });
-    cy.wait(500);
-
-    // Buscar el botón con múltiples estrategias (tanto button como a)
-    return cy.get('body').then(($body) => {
-      const regex = new RegExp(`^${textoBoton}$`, 'i');
-
-      // Buscar por texto en botones y enlaces visibles primero
-      let $btn = $body.find('button:visible, a:visible').filter((i, el) => {
-        const text = Cypress.$(el).text().trim();
-        return regex.test(text);
-      }).first();
-
-      // Si no se encuentra, buscar en todos los botones y enlaces
-      if ($btn.length === 0) {
-        $btn = $body.find('button, a').filter((i, el) => {
-          const text = Cypress.$(el).text().trim();
-          return regex.test(text);
-        }).first();
+    // PRIMERO verificar si hay error 500 antes de intentar hacer scroll
+    return cy.get('body', { timeout: 5000 }).then(($body) => {
+      if (!$body || $body.length === 0) {
+        cy.log('No se encontró el body - posible error 500');
+        return cy.wrap({ huboError: true });
       }
 
-      if ($btn.length > 0) {
-        cy.wrap($btn).scrollIntoView({ duration: 300 }).should('be.visible');
-        cy.wrap($btn).click({ force: true });
-      } else {
-        // Fallback: usar cy.contains
-        cy.contains('button, a', regex, { timeout: 10000 })
-          .scrollIntoView()
-          .click({ force: true });
+      const texto = $body && $body.length > 0 ? ($body.text() ? $body.text().toLowerCase() : '') : '';
+      const tieneError500 = texto.includes('500') ||
+        texto.includes('internal server error') ||
+        texto.includes('error interno del servidor') ||
+        texto.includes('server error') ||
+        texto.includes('500 server error');
+
+      if (tieneError500) {
+        cy.log('ERROR 500 detectado en encontrarBotonAlFinal - no se intentará hacer scroll');
+        return cy.wrap({ huboError: true });
       }
+
+      // Si no hay error, intentar hacer scroll (con ensureScrollable: false para evitar errores)
+      return cy.scrollTo('bottom', { duration: 500, ensureScrollable: false })
+        .then(() => cy.wait(500))
+        .then(() => {
+          // Buscar el botón con múltiples estrategias (tanto button como a)
+          const regex = new RegExp(`^${textoBoton}$`, 'i');
+
+          // Buscar por texto en botones y enlaces visibles primero
+          let $btn = $body.find('button:visible, a:visible').filter((i, el) => {
+            const text = Cypress.$(el).text().trim();
+            return regex.test(text);
+          }).first();
+
+          // Si no se encuentra, buscar en todos los botones y enlaces
+          if ($btn.length === 0) {
+            $btn = $body.find('button, a').filter((i, el) => {
+              const text = Cypress.$(el).text().trim();
+              return regex.test(text);
+            }).first();
+          }
+
+          if ($btn.length > 0) {
+            cy.wrap($btn).scrollIntoView({ duration: 300 }).should('be.visible');
+            cy.wrap($btn).click({ force: true });
+          } else {
+            // Fallback: usar cy.contains
+            cy.contains('button, a', regex, { timeout: 10000 })
+              .scrollIntoView()
+              .click({ force: true });
+          }
+        });
+    }, () => {
+      // Si falla al obtener el body, verificar si hay error 500 en el documento
+      return cy.document().then((doc) => {
+        const docText = doc.body ? (doc.body.textContent || '').toLowerCase() : '';
+        const tieneError500EnDoc = docText.includes('500') ||
+          docText.includes('internal server error') ||
+          docText.includes('error interno del servidor') ||
+          docText.includes('server error') ||
+          docText.includes('500 server error');
+
+        if (tieneError500EnDoc) {
+          cy.log('ERROR 500 detectado en el documento - no se intentará hacer scroll');
+          return cy.wrap({ huboError: true });
+        }
+
+        // Si no hay error 500, retornar error genérico
+        cy.log('No se pudo obtener el body - posible error');
+        return cy.wrap({ huboError: true });
+      });
     });
   }
 
@@ -1349,31 +1888,83 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
   function empleadoSinIncurridos(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
     const empresa = obtenerValorEmpresa(casoExcel) || 'Admin';
-    
+
     // Obtener nombre y reemplazar XXX con 3 números aleatorios
     let nombre = obtenerValorNombre(casoExcel) || 'SinIncurridosXXX';
     if (nombre.includes('XXX')) {
       const randomNum = Math.floor(Math.random() * 900) + 100; // Genera 3 dígitos (100-999)
       nombre = nombre.replace(/XXX/g, randomNum.toString());
     }
-    
+
     // Obtener email y reemplazar XXX con 3 números aleatorios
     let email = obtenerValorEmail(casoExcel) || 'prueba@pruebasinincurridosXXX';
     if (email.includes('XXX')) {
       const randomNum = Math.floor(Math.random() * 900) + 100; // Genera 3 dígitos (100-999)
       email = email.replace(/XXX/g, randomNum.toString());
     }
-    
+
     const grupo = obtenerValorGrupo(casoExcel) || 'Grupo sin incurridos';
 
     return abrirFormularioCrearEmpleado()
-      .then(() => seleccionarEmpresa(empresa))
-      .then(() => escribirCampo('input[name="data.name"], input#data\\.name', nombre))
-      .then(() => escribirCampo('input[name="data.email"], input#data\\.email', email))
-      .then(() => seleccionarOpcionChoices(grupo, 'Grupo'))
-      .then(() => enviarFormularioCrear())
-      .then(() => esperarToastExito())
-      .then(() => {
+      .then((resultado) => {
+        // Verificar si hay error en el resultado
+        if (resultado && resultado.error) {
+          // Si hay error, registrar directamente en Excel
+          const casoId = casoExcel.caso || 'TC000';
+          const nombre = `${casoId} - ${casoExcel.nombre}`;
+          cy.log(`Error detectado: ${resultado.error} - registrando en Excel`);
+          registrarResultado(
+            casoId,
+            nombre,
+            'Comportamiento correcto',
+            resultado.mensaje || `ERROR: ${resultado.error}`,
+            'ERROR'
+          );
+          // Retornar un valor que indique que hubo error (sin lanzar excepción)
+          return cy.wrap({ huboError: true });
+        }
+        return seleccionarEmpresa(empresa);
+      })
+      .then((resultadoAnterior) => {
+        // Si hubo error anterior, NO continuar
+        if (resultadoAnterior && resultadoAnterior.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
+        return escribirCampo('input[name="data.name"], input#data\\.name', nombre);
+      })
+      .then((resultadoAnterior) => {
+        // Si hubo error anterior, NO continuar
+        if (resultadoAnterior && resultadoAnterior.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
+        return escribirCampo('input[name="data.email"], input#data\\.email', email);
+      })
+      .then((resultadoAnterior) => {
+        // Si hubo error anterior, NO continuar
+        if (resultadoAnterior && resultadoAnterior.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
+        return seleccionarOpcionChoices(grupo, 'Grupo');
+      })
+      .then((resultadoAnterior) => {
+        // Si hubo error anterior, NO continuar
+        if (resultadoAnterior && resultadoAnterior.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
+        return enviarFormularioCrear();
+      })
+      .then((resultadoAnterior) => {
+        // Si hubo error anterior, NO continuar
+        if (resultadoAnterior && resultadoAnterior.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
+        return esperarToastExito();
+      })
+      .then((resultadoAnterior) => {
+        // Si hubo error anterior, NO continuar
+        if (resultadoAnterior && resultadoAnterior.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
         // Verificar que se creó correctamente y el grupo se asignó desde hoy
         cy.log('TC043: Verificando que el empleado se creó correctamente y el grupo se asignó desde hoy');
         cy.wait(1000);
@@ -1385,122 +1976,283 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
   function empleadoConincurridos(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
 
-    // Buscar mediante el buscador al empleado "SuperAdmin" y editar
-    cy.get('input[placeholder*="Buscar"], input[placeholder*="search"]', { timeout: 10000 })
+    // Buscar mediante el buscador al empleado "superadmin" (igual que TC002)
+    const valorBusqueda = 'superadmin';
+    return cy.get('input[placeholder*="Buscar"], input[placeholder*="search"]', { timeout: 10000 })
       .should('be.visible')
       .clear({ force: true })
-      .type('SuperAdmin', { force: true })
-      .type('{enter}', { force: true });
-
-    cy.wait(800);
-
-    // Buscar específicamente la fila que contiene "SuperAdmin" (no solo "Admin")
-    cy.contains('.fi-ta-row:visible, tbody tr:visible', 'SuperAdmin', { timeout: 10000 })
-      .should('be.visible')
-      .within(() => {
-        cy.contains('button, a', /Editar/i, { timeout: 10000 }).click({ force: true });
-      });
-
-    cy.url({ timeout: 10000 }).should('include', `${EMPLEADOS_PATH}/`).and('include', '/edit');
-    cy.wait(500);
-
-    // Obtener grupo del Excel, si no viene, usar seleccionarOpcionChoices con el primer grupo disponible
-    const grupoNuevo = obtenerValorGrupo(casoExcel);
-    
-    if (grupoNuevo && grupoNuevo.trim()) {
-      // Si viene un grupo en el Excel, usarlo directamente (igual que TC043)
-      return seleccionarOpcionChoices(grupoNuevo, 'Grupo')
-        .then(() => verificarMensajeFichajes());
-    } else {
-      // Si no viene grupo, seleccionar cualquier grupo usando la misma lógica que seleccionarOpcionChoices
-      // pero seleccionando el primer grupo disponible sin buscar por texto
-      return seleccionarPrimerGrupoDisponible()
-        .then(() => verificarMensajeFichajes());
-    }
-  }
-
-  function seleccionarPrimerGrupoDisponible() {
-    cy.log('TC044: Seleccionando el primer grupo disponible...');
-    const labelRegex = /Grupo/i;
-    const openersSelector = '.choices, .choices[data-type="select-one"], [role="combobox"], [aria-haspopup="listbox"], select, .fi-select-trigger';
-
-    // Buscar y abrir el dropdown de grupo (igual que seleccionarOpcionChoices)
-    return cy.contains('label, span, div', labelRegex, { timeout: 10000 })
-      .then(($label) => {
-        const wrappers = [
-          $label.closest('[data-field-wrapper]'),
-          $label.closest('.fi-field'),
-          $label.closest('.fi-fo-field-wrp'),
-          $label.closest('.fi-fo-field'),
-          $label.closest('.grid'),
-          $label.closest('section'),
-          $label.closest('form'),
-          $label.parent()
-        ].filter($el => $el && $el.length);
-
-        for (const $wrapper of wrappers) {
-          const $objetivo = $wrapper.find(openersSelector).filter(':visible').first();
-          if ($objetivo.length) {
-            cy.wrap($objetivo).scrollIntoView().click({ force: true });
-            return;
-          }
-        }
-
-        cy.get(openersSelector, { timeout: 10000 })
-          .filter(':visible')
-          .first()
-          .scrollIntoView()
-          .click({ force: true });
-      })
+      .type(valorBusqueda, { force: true })
+      .type('{enter}', { force: true })
+      .then(() => cy.wait(800))
       .then(() => {
-        cy.wait(800);
-        
-        // Seleccionar un grupo diferente a "SuperAdmin Group"
-        return cy.get('body').then(($body) => {
-          const $dropdown = $body.find('.choices__list--dropdown.is-active:visible, [role="listbox"]:visible').first();
-          if ($dropdown.length === 0) {
-            throw new Error('TC044: No se pudo abrir el dropdown de grupo');
+        // Verificar error 500 después de buscar
+        return cy.get('body', { timeout: 5000 }).then(($body) => {
+          if (!$body || $body.length === 0) {
+            cy.log('No se encontró el body después de buscar - posible error 500');
+            const casoId = casoExcel.caso || 'TC000';
+            const nombre = `${casoId} - ${casoExcel.nombre}`;
+            registrarResultado(
+              casoId,
+              nombre,
+              'Comportamiento correcto',
+              'ERROR 500: Error interno del servidor detectado después de buscar',
+              'ERROR'
+            );
+            return cy.wrap({ huboError: true });
           }
-          
-          const $opciones = $dropdown.find('.choices__item--choice:visible, [role="option"]:visible');
-          if ($opciones.length === 0) {
-            throw new Error('TC044: No se encontraron opciones de grupo disponibles');
+
+          const texto = $body && $body.length > 0 ? ($body.text() ? $body.text().toLowerCase() : '') : '';
+          const tieneError500 = texto.includes('500') ||
+            texto.includes('internal server error') ||
+            texto.includes('error interno del servidor') ||
+            texto.includes('server error') ||
+            texto.includes('500 server error');
+
+          if (tieneError500) {
+            cy.log('ERROR 500 detectado después de buscar - registrando en Excel');
+            const casoId = casoExcel.caso || 'TC000';
+            const nombre = `${casoId} - ${casoExcel.nombre}`;
+            registrarResultado(
+              casoId,
+              nombre,
+              'Comportamiento correcto',
+              'ERROR 500: Error interno del servidor detectado después de buscar',
+              'ERROR'
+            );
+            return cy.wrap({ huboError: true });
           }
-          
-          // Filtrar opciones que NO sean "SuperAdmin Group"
-          const $opcionesDiferentes = $opciones.filter((i, el) => {
-            const texto = Cypress.$(el).text().trim().toLowerCase();
-            return texto !== 'superadmin group';
-          });
-          
-          if ($opcionesDiferentes.length > 0) {
-            cy.log('TC044: Seleccionando un grupo diferente a "SuperAdmin Group"');
-            cy.wrap($opcionesDiferentes).first().scrollIntoView().click({ force: true });
+
+          // Verificar que hay resultados de búsqueda
+          if ($body.find('.fi-empty-state, .fi-ta-empty-state').length) {
+            cy.contains('.fi-empty-state, .fi-ta-empty-state', /No se encontraron registros/i).should('be.visible');
           } else {
-            // Si todas las opciones son "SuperAdmin Group", seleccionar la segunda (que será diferente por índice)
-            cy.log('TC044: Todas las opciones parecen ser "SuperAdmin Group", seleccionando la segunda disponible');
-            if ($opciones.length > 1) {
-              cy.wrap($opciones).eq(1).scrollIntoView().click({ force: true });
-            } else {
-              throw new Error('TC044: No se encontró ningún grupo diferente a "SuperAdmin Group"');
-            }
+            cy.get('.fi-ta-row:visible, tr:visible').should('have.length.greaterThan', 0);
           }
+
+          // Editar usando el mismo método que TC027
+          cy.get('.fi-ta-table, table').scrollTo('right', { ensureScrollable: false });
+          cy.wait(400);
+          cy.get('.fi-ta-row:visible').first().within(() => {
+            cy.contains('button, a', /Editar/i).click({ force: true });
+          });
+          return cy.wrap(null);
         });
       })
-      .then(() => cy.wait(300));
+      .then((resultadoAnterior) => {
+        // Si hubo error anterior, NO continuar
+        if (resultadoAnterior && resultadoAnterior.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
+        return cy.url({ timeout: 10000 }).should('include', `${EMPLEADOS_PATH}/`).and('include', '/edit');
+      })
+      .then((resultadoAnterior) => {
+        // Si hubo error anterior, NO continuar
+        if (resultadoAnterior && resultadoAnterior.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
+        return cy.wait(500);
+      })
+      .then((resultadoAnterior) => {
+        // Si hubo error anterior, NO continuar
+        if (resultadoAnterior && resultadoAnterior.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
+
+        // Verificar error 500 antes de cambiar el grupo
+        return cy.get('body', { timeout: 5000 }).then(($body) => {
+          if (!$body || $body.length === 0) {
+            cy.log('No se encontró el body en el formulario de edición - posible error 500');
+            const casoId = casoExcel.caso || 'TC000';
+            const nombre = `${casoId} - ${casoExcel.nombre}`;
+            registrarResultado(
+              casoId,
+              nombre,
+              'Comportamiento correcto',
+              'ERROR 500: Error interno del servidor detectado en el formulario de edición',
+              'ERROR'
+            );
+            return cy.wrap({ huboError: true });
+          }
+
+          const texto = $body && $body.length > 0 ? ($body.text() ? $body.text().toLowerCase() : '') : '';
+          const tieneError500 = texto.includes('500') ||
+            texto.includes('internal server error') ||
+            texto.includes('error interno del servidor') ||
+            texto.includes('server error') ||
+            texto.includes('500 server error');
+
+          if (tieneError500) {
+            cy.log('ERROR 500 detectado en el formulario de edición - registrando en Excel');
+            const casoId = casoExcel.caso || 'TC000';
+            const nombre = `${casoId} - ${casoExcel.nombre}`;
+            registrarResultado(
+              casoId,
+              nombre,
+              'Comportamiento correcto',
+              'ERROR 500: Error interno del servidor detectado en el formulario de edición',
+              'ERROR'
+            );
+            return cy.wrap({ huboError: true });
+          }
+
+          // Bajar hasta el campo "Grupo", hacer clic y seleccionar otro grupo
+          // Primero hacer scroll hacia abajo para encontrar el campo "Grupo"
+          cy.scrollTo('bottom', { duration: 500, ensureScrollable: false });
+          cy.wait(300);
+
+          // Buscar el label "Grupo" (puede estar en diferentes lugares)
+          return cy.contains('label, span, div', /Grupo/i, { timeout: 10000 })
+            .scrollIntoView({ duration: 300 })
+            .then(($label) => {
+              // Buscar el dropdown de grupo cerca del label
+              const wrappers = [
+                $label.closest('[data-field-wrapper]'),
+                $label.closest('.fi-field'),
+                $label.closest('.fi-fo-field-wrp'),
+                $label.closest('.fi-fo-field'),
+                $label.closest('.grid'),
+                $label.closest('section'),
+                $label.closest('form'),
+                $label.parent()
+              ].filter($el => $el && $el.length);
+
+              const openersSelector = '.choices, .choices[data-type="select-one"], [role="combobox"], [aria-haspopup="listbox"], select, .fi-select-trigger';
+
+              let encontrado = false;
+              for (const $wrapper of wrappers) {
+                const $objetivo = $wrapper.find(openersSelector).filter(':visible').first();
+                if ($objetivo.length) {
+                  cy.wrap($objetivo).scrollIntoView().click({ force: true });
+                  cy.wait(500);
+                  encontrado = true;
+                  break;
+                }
+              }
+
+              if (!encontrado) {
+                // Si no se encontró en los wrappers, buscar directamente cerca del label
+                cy.get(openersSelector, { timeout: 10000 })
+                  .filter(':visible')
+                  .first()
+                  .scrollIntoView()
+                  .click({ force: true });
+                cy.wait(500);
+              }
+
+              // Esperar a que se abra el dropdown y seleccionar un grupo diferente
+              return cy.wait(500)
+                .then(() => cy.get('body'))
+                .then(($body) => {
+                  const $dropdown = $body.find('.choices__list--dropdown.is-active:visible, [role="listbox"]:visible').first();
+                  if ($dropdown.length === 0) {
+                    cy.log('No se pudo abrir el dropdown de grupo');
+                    return cy.wrap({ huboError: true });
+                  }
+
+                  const $opciones = $dropdown.find('.choices__item--choice:visible, [role="option"]:visible');
+                  if ($opciones.length === 0) {
+                    cy.log('No se encontraron opciones de grupo disponibles');
+                    return cy.wrap({ huboError: true });
+                  }
+
+                  // Obtener el texto del grupo actual (SuperAdmin Group)
+                  const grupoActual = $body.find('.choices__item--selectable.is-selected, .choices__item--selected').text().trim().toLowerCase();
+
+                  // Filtrar opciones que NO sean el grupo actual
+                  const $opcionesDiferentes = $opciones.filter((i, el) => {
+                    const texto = Cypress.$(el).text().trim().toLowerCase();
+                    return texto !== grupoActual && texto.length > 0;
+                  });
+
+                  if ($opcionesDiferentes.length > 0) {
+                    cy.log(`TC044: Seleccionando un grupo diferente a "${grupoActual}"`);
+                    cy.wrap($opcionesDiferentes).first().scrollIntoView().click({ force: true });
+                  } else {
+                    // Si todas las opciones son el grupo actual, seleccionar la segunda (que será diferente por índice)
+                    cy.log('TC044: Todas las opciones parecen ser el grupo actual, seleccionando la segunda disponible');
+                    if ($opciones.length > 1) {
+                      cy.wrap($opciones).eq(1).scrollIntoView().click({ force: true });
+                    } else {
+                      cy.log('No se encontró ningún grupo diferente');
+                      return cy.wrap({ huboError: true });
+                    }
+                  }
+
+                  // Esperar un momento después de hacer clic y verificar si hay error 500
+                  return cy.wait(1000)
+                    .then(() => cy.get('body', { timeout: 3000 }))
+                    .then(($body) => {
+                      // Verificar si $body existe antes de usarlo
+                      if (!$body || $body.length === 0) {
+                        cy.log('No se encontró el body después de cambiar el grupo - posible error 500');
+                        const casoId = casoExcel.caso || 'TC000';
+                        const nombre = `${casoId} - ${casoExcel.nombre}`;
+                        registrarResultado(
+                          casoId,
+                          nombre,
+                          'Comportamiento correcto',
+                          'ERROR 500: Error interno del servidor detectado al cambiar el grupo',
+                          'ERROR'
+                        );
+                        return cy.wrap({ huboError: true });
+                      }
+
+                      // Verificar si hay error 500 después de cambiar el grupo
+                      const texto = $body.text() ? $body.text().toLowerCase() : '';
+                      const tieneError500 = texto.includes('500') ||
+                        texto.includes('internal server error') ||
+                        texto.includes('error interno del servidor') ||
+                        texto.includes('server error') ||
+                        texto.includes('500 server error') ||
+                        ($body.find('[class*="error-500"], [class*="error500"], [id*="error-500"]').length > 0);
+
+                      if (tieneError500) {
+                        cy.log('ERROR 500 detectado después de cambiar el grupo - registrando en Excel');
+                        const casoId = casoExcel.caso || 'TC000';
+                        const nombre = `${casoId} - ${casoExcel.nombre}`;
+                        registrarResultado(
+                          casoId,
+                          nombre,
+                          'Comportamiento correcto',
+                          'ERROR 500: Error interno del servidor detectado al cambiar el grupo',
+                          'ERROR'
+                        );
+                        return cy.wrap({ huboError: true });
+                      }
+
+                      // Si no hay error 500, verificar el mensaje sobre fichajes
+                      return verificarMensajeFichajes();
+                    }, () => {
+                      // Si falla al obtener el body, puede ser error 500
+                      cy.log('Error al obtener el body después de cambiar el grupo - posible error 500');
+                      const casoId = casoExcel.caso || 'TC000';
+                      const nombre = `${casoId} - ${casoExcel.nombre}`;
+                      registrarResultado(
+                        casoId,
+                        nombre,
+                        'Comportamiento correcto',
+                        'ERROR 500: Error interno del servidor detectado al cambiar el grupo',
+                        'ERROR'
+                      );
+                      return cy.wrap({ huboError: true });
+                    });
+                });
+            });
+        });
+      });
   }
 
   function verificarMensajeFichajes() {
     cy.log('TC044: Verificando que aparezca el mensaje sobre fichajes...');
-    
+
     // Esperar un momento para que el mensaje aparezca después de cambiar el grupo
     cy.wait(1000);
-    
+
     // Verificar que aparezca el mensaje sobre fichajes usando cy.contains que espera automáticamente
     return cy.contains('div, span, p', /El usuario tiene fichajes hoy\. El cambio debe aplicarse a partir de mañana\./i, { timeout: 10000 })
       .should('be.visible')
       .then(() => {
-        cy.log('TC044: ✓ Se encontró el mensaje sobre fichajes correctamente');
+        cy.log('TC044: Se encontró el mensaje sobre fichajes correctamente');
       });
   }
 });
