@@ -5,7 +5,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
   const BASE_URL = 'https://horario.dev.novatrans.app';
   const DASHBOARD_PATH = '/panelinterno';
   const LOGIN_PATH = '/login';
-
+  
   // Credenciales de usuario admin (desde variables de entorno)
   const ADMIN_EMAIL = Cypress.env('ADMIN_EMAIL') || 'admin@admin.app';
   const ADMIN_PASSWORD = Cypress.env('ADMIN_PASSWORD') || 'novatranshorario@2025';
@@ -68,10 +68,10 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
   // === Helper: hacer login con usuario admin ===
   function loginAdmin() {
     cy.log('Haciendo login con usuario admin...');
-    cy.login({
-      email: ADMIN_EMAIL,
-      password: ADMIN_PASSWORD,
-      useSession: false
+    cy.login({ 
+      email: ADMIN_EMAIL, 
+      password: ADMIN_PASSWORD, 
+      useSession: false 
     });
     // Verificar si redirigió a fichar y navegar a Panel interno si es necesario
     cy.url({ timeout: 15000 }).then((currentUrl) => {
@@ -99,7 +99,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
     return cy.url().then((currentUrl) => {
       const verificarPantallaCargada = () => {
         cy.wait(1000);
-
+        
         // Intentar cerrar panel lateral si existe
         cy.get('body').then(($body) => {
           const hayPanelLateral = $body.find('[class*="overlay"], [class*="modal"], [class*="drawer"], [class*="sidebar"]').length > 0;
@@ -111,30 +111,30 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
         });
 
         cy.get('body', { timeout: 20000 }).should('be.visible');
-
+        
         // Verificar si hay tabla o estado de "sin datos"
         return cy.get('body', { timeout: 20000 }).then(($body) => {
           const hayTabla = $body.find('.fi-ta-table, table').length > 0;
-
+          
           if (hayTabla) {
             cy.log('Tabla encontrada, verificando visibilidad...');
             return cy.get('.fi-ta-table, table', { timeout: 20000 }).should('exist');
           }
-
+          
           // Si no hay tabla, verificar si hay estado de "sin datos"
           const hayEstadoVacio = $body.find('.fi-empty-state, .fi-ta-empty-state, [class*="empty"]').length > 0;
           const textoBody = $body.text().toLowerCase();
-          const hayMensajeSinDatos = textoBody.includes('no hay datos') ||
-            textoBody.includes('sin registros') ||
-            textoBody.includes('tabla vacía') ||
-            textoBody.includes('no se encontraron') ||
-            textoBody.includes('sin resultados');
-
+          const hayMensajeSinDatos = textoBody.includes('no hay datos') || 
+                                     textoBody.includes('sin registros') || 
+                                     textoBody.includes('tabla vacía') ||
+                                     textoBody.includes('no se encontraron') ||
+                                     textoBody.includes('sin resultados');
+          
           if (hayEstadoVacio || hayMensajeSinDatos) {
             cy.log('No hay registros en la tabla - esto es válido (OK)');
             return cy.wrap(true);
           }
-
+          
           // Si no hay tabla ni mensaje, esperar un poco más
           cy.log('Esperando a que la tabla se cargue...');
           return cy.get('.fi-ta-table, table', { timeout: 20000 }).should('exist').catch(() => {
@@ -238,8 +238,8 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
     return cy.get('body', { timeout: 5000 }).then($body => {
       try {
         const textoBody = $body.text().toLowerCase();
-        const tieneError500 =
-          textoBody.includes('500') ||
+        const tieneError500 = 
+          textoBody.includes('500') || 
           textoBody.includes('internal server error') ||
           textoBody.includes('server error') ||
           textoBody.includes('error interno del servidor') ||
@@ -273,6 +273,143 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
     });
   }
 
+  // === Helper: Verificar error 500 después de pulsar Crear en jornada semanal ===
+  function verificarError500DespuesCrearJornadaSemanal(casoExcel, numero) {
+    return cy.get('body', { timeout: 3000 }).then(($body) => {
+      if (!$body || $body.length === 0) {
+        // Si no hay body, verificar en el documento
+        return cy.document().then((doc) => {
+          if (!doc || !doc.body) {
+            // Si no hay documento o body, registrar error 500 de todas formas
+            cy.log('No se pudo obtener el documento - registrando ERROR 500 en Excel');
+            const casoId = casoExcel.caso || `TC${String(numero).padStart(3, '0')}`;
+            const nombre = `${casoId} - ${casoExcel.nombre}`;
+            cy.registrarResultados({
+              numero: parseInt(casoId.replace('TC', '')) || numero,
+              nombre,
+              esperado: casoExcel.resultado_esperado || 'Comportamiento correcto',
+              obtenido: 'ERROR 500: Error interno del servidor detectado al crear',
+              resultado: 'ERROR',
+              archivo,
+              pantalla: 'Pruebas Usuario Admin'
+            });
+            return cy.wrap(true); // Indica que hubo error
+          }
+          const docText = doc.body.textContent ? doc.body.textContent.toLowerCase() : '';
+          const tieneError500 = docText.includes('500') ||
+            docText.includes('internal server error') ||
+            docText.includes('error interno del servidor') ||
+            docText.includes('server error') ||
+            docText.includes('500 server error');
+          
+          if (tieneError500) {
+            cy.log('ERROR 500 detectado después de crear - registrando en Excel');
+            const casoId = casoExcel.caso || `TC${String(numero).padStart(3, '0')}`;
+            const nombre = `${casoId} - ${casoExcel.nombre}`;
+            cy.registrarResultados({
+              numero: parseInt(casoId.replace('TC', '')) || numero,
+              nombre,
+              esperado: casoExcel.resultado_esperado || 'Comportamiento correcto',
+              obtenido: 'ERROR 500: Error interno del servidor detectado al crear',
+              resultado: 'ERROR',
+              archivo,
+              pantalla: 'Pruebas Usuario Admin'
+            });
+            return cy.wrap(true); // Indica que hubo error
+          }
+          return cy.wrap(false); // No hubo error
+        }, () => {
+          // Si falla al obtener el documento, registrar error 500 de todas formas
+          cy.log('Error al obtener el documento - registrando ERROR 500 en Excel');
+          const casoId = casoExcel.caso || `TC${String(numero).padStart(3, '0')}`;
+          const nombre = `${casoId} - ${casoExcel.nombre}`;
+          cy.registrarResultados({
+            numero: parseInt(casoId.replace('TC', '')) || numero,
+            nombre,
+            esperado: casoExcel.resultado_esperado || 'Comportamiento correcto',
+            obtenido: 'ERROR 500: Error interno del servidor detectado al crear',
+            resultado: 'ERROR',
+            archivo,
+            pantalla: 'Pruebas Usuario Admin'
+          });
+          return cy.wrap(true); // Indica que hubo error
+        });
+      }
+
+      const texto = $body.text() ? $body.text().toLowerCase() : '';
+      const tieneError500 = texto.includes('500') ||
+        texto.includes('internal server error') ||
+        texto.includes('error interno del servidor') ||
+        texto.includes('server error') ||
+        texto.includes('500 server error') ||
+        $body.find('[class*="error-500"], [class*="error500"], [id*="error-500"]').length > 0;
+
+      if (tieneError500) {
+        cy.log('ERROR 500 detectado después de crear - registrando en Excel');
+        const casoId = casoExcel.caso || `TC${String(numero).padStart(3, '0')}`;
+        const nombre = `${casoId} - ${casoExcel.nombre}`;
+        cy.registrarResultados({
+          numero: parseInt(casoId.replace('TC', '')) || numero,
+          nombre,
+          esperado: casoExcel.resultado_esperado || 'Comportamiento correcto',
+          obtenido: 'ERROR 500: Error interno del servidor detectado al crear',
+          resultado: 'ERROR',
+          archivo,
+          pantalla: 'Pruebas Usuario Admin'
+        });
+        return cy.wrap(true); // Indica que hubo error
+      }
+
+      return cy.wrap(false); // No hubo error
+    }, () => {
+      // Si falla al obtener el body, verificar en el documento
+      return cy.document().then((doc) => {
+        if (!doc || !doc.body) {
+          // Si no hay documento o body, registrar error 500 de todas formas
+          cy.log('No se pudo obtener el documento - registrando ERROR 500 en Excel');
+          const casoId = casoExcel.caso || `TC${String(numero).padStart(3, '0')}`;
+          const nombre = `${casoId} - ${casoExcel.nombre}`;
+          cy.registrarResultados({
+            numero: parseInt(casoId.replace('TC', '')) || numero,
+            nombre,
+            esperado: casoExcel.resultado_esperado || 'Comportamiento correcto',
+            obtenido: 'ERROR 500: Error interno del servidor detectado al crear',
+            resultado: 'ERROR',
+            archivo,
+            pantalla: 'Pruebas Usuario Admin'
+          });
+          return cy.wrap(true); // Indica que hubo error
+        }
+        const docText = doc.body.textContent ? doc.body.textContent.toLowerCase() : '';
+        const tieneError500 = docText.includes('500') ||
+          docText.includes('internal server error') ||
+          docText.includes('error interno del servidor') ||
+          docText.includes('server error') ||
+          docText.includes('500 server error');
+        
+        if (tieneError500) {
+          cy.log('ERROR 500 detectado en el documento después de crear - registrando en Excel');
+          const casoId = casoExcel.caso || `TC${String(numero).padStart(3, '0')}`;
+          const nombre = `${casoId} - ${casoExcel.nombre}`;
+          cy.registrarResultados({
+            numero: parseInt(casoId.replace('TC', '')) || numero,
+            nombre,
+            esperado: casoExcel.resultado_esperado || 'Comportamiento correcto',
+            obtenido: 'ERROR 500: Error interno del servidor detectado en el documento después de crear',
+            resultado: 'ERROR',
+            archivo,
+            pantalla: 'Pruebas Usuario Admin'
+          });
+          return cy.wrap(true); // Indica que hubo error
+        }
+        return cy.wrap(false); // No hubo error
+      }, () => {
+        // Si falla todo, asumir que no hay error
+        return cy.wrap(false);
+      });
+    });
+  }
+
   // === Helpers para selección de opciones ===
   function seleccionarOpcionChoices(texto, label) {
     if (!texto) return cy.wrap(null);
@@ -288,13 +425,13 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           const textoLabel = Cypress.$(el).text().trim();
           return labelRegex.test(textoLabel);
         });
-
+        
         if ($labels.length) {
           // Buscar el wrapper del campo
           for (let i = 0; i < $labels.length; i++) {
             const $label = $labels.eq(i);
             const $wrapper = $label.closest('.fi-field, .fi-fo-field-wrp, .fi-fo-field, section, .grid, form').first();
-
+            
             if ($wrapper.length) {
               // Buscar el valor seleccionado en múltiples lugares
               const selectoresValor = [
@@ -307,7 +444,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
                 '.fi-select-trigger',
                 '[role="combobox"]'
               ];
-
+              
               for (const selector of selectoresValor) {
                 const $valor = $wrapper.find(selector).first();
                 if ($valor.length) {
@@ -319,13 +456,13 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
                   }
                 }
               }
-
+              
               if (yaSeleccionado) break;
             }
           }
         }
       }
-
+      
       if (yaSeleccionado) {
         return cy.wrap(true);
       }
@@ -538,7 +675,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
     cy.get('body', { timeout: 10000 }).should('be.visible');
     cy.get('body').then($body => {
       const tieneEmpresas = $body.find('a:contains("Empresas"), span:contains("Empresas"), div:contains("Empresas")').length > 0 ||
-        $body.text().toLowerCase().includes('empresas');
+                            $body.text().toLowerCase().includes('empresas');
       if (tieneEmpresas) {
         cy.registrarResultados({
           numero: parseInt(casoExcel.caso.replace('TC', '')),
@@ -572,7 +709,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
     cy.get('body', { timeout: 10000 }).should('be.visible');
     cy.get('body').then($body => {
       const tieneRoles = $body.find('a:contains("Roles"), span:contains("Roles"), div:contains("Roles")').length > 0 ||
-        $body.text().toLowerCase().includes('roles');
+                         $body.text().toLowerCase().includes('roles');
       if (tieneRoles) {
         cy.registrarResultados({
           numero: parseInt(casoExcel.caso.replace('TC', '')),
@@ -608,7 +745,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
   function departamentosCrearMinimo(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
     const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || procesarPruebaXXX(casoExcel.dato_1) || `prueba${generarNumeroAleatorio()}`;
-
+    
     return irAPantallaLimpio('/panelinterno/departamentos', 'Departamentos')
       .then(() => {
         // Buscar el botón "Crear departamento" de forma insensible a mayúsculas
@@ -648,7 +785,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
     const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || procesarPruebaXXX(casoExcel.dato_1) || `prueba${generarNumeroAleatorio()}`;
     const descripcion = obtenerDatoPorEtiqueta(casoExcel, 'data.description') || casoExcel.dato_2 || 'pruebas';
-
+    
     return irAPantallaLimpio('/panelinterno/departamentos', 'Departamentos')
       .then(() => {
         // Mismo botón que TC005: "Crear departamento" (insensible a mayúsculas)
@@ -702,8 +839,8 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
         cy.wait(1000);
         // Verificar que aparece el aviso de validación
         cy.get('body').then($body => {
-          const tieneAviso = $body.text().toLowerCase().includes('completa este campo') ||
-            $body.find('input[name="data.name"]:invalid').length > 0;
+          const tieneAviso = $body.text().toLowerCase().includes('completa este campo') || 
+                            $body.find('input[name="data.name"]:invalid').length > 0;
           if (tieneAviso) {
             cy.registrarResultados({
               numero: parseInt(casoExcel.caso.replace('TC', '')),
@@ -723,7 +860,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
   function departamentosCrearDuplicado(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
     const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || casoExcel.dato_1 || 'prueba';
-
+    
     return irAPantallaLimpio('/panelinterno/departamentos', 'Departamentos')
       .then(() => {
         cy.contains('button, a', /crear\s+departamento/i, { timeout: 10000 })
@@ -739,7 +876,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
         cy.wait(2000);
         cy.get('body').then($body => {
           const tieneAvisoDuplicado = $body.text().toLowerCase().includes('el campo nombre ya ha sido registrado') ||
-            $body.text().toLowerCase().includes('ya ha sido registrado');
+                                      $body.text().toLowerCase().includes('ya ha sido registrado');
           if (tieneAvisoDuplicado) {
             cy.registrarResultados({
               numero: parseInt(casoExcel.caso.replace('TC', '')),
@@ -769,7 +906,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
 
   function departamentosEditar(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-
+    
     return irAPantallaLimpio('/panelinterno/departamentos', 'Departamentos')
       .then(() => {
         cy.get('.fi-ta-table, table', { timeout: 10000 }).scrollTo('right', { ensureScrollable: false });
@@ -800,7 +937,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
   function gruposCrearMinimo(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
     const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || procesarPruebaXXX(casoExcel.dato_1) || `prueba${generarNumeroAleatorio()}`;
-
+    
     return irAPantallaLimpio('/panelinterno/grupos', 'Grupos')
       .then(() => {
         cy.get('a:contains("Crear grupo"), button:contains("Crear grupo")', { timeout: 10000 })
@@ -837,7 +974,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
     const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || procesarPruebaXXX(casoExcel.dato_1) || `prueba${generarNumeroAleatorio()}`;
     const descripcion = obtenerDatoPorEtiqueta(casoExcel, 'data.description') || casoExcel.dato_2 || 'prueba';
-
+    
     return irAPantallaLimpio('/panelinterno/grupos', 'Grupos')
       .then(() => {
         cy.get('a:contains("Crear grupo"), button:contains("Crear grupo")', { timeout: 10000 })
@@ -858,7 +995,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
   function gruposCrearDuplicado(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
     const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || casoExcel.dato_1 || 'prueba';
-
+    
     return irAPantallaLimpio('/panelinterno/grupos', 'Grupos')
       .then(() => {
         cy.get('a:contains("Crear grupo"), button:contains("Crear grupo")', { timeout: 10000 })
@@ -873,7 +1010,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
         cy.wait(2000);
         cy.get('body').then($body => {
           const tieneAvisoDuplicado = $body.text().toLowerCase().includes('el campo nombre del grupo ya ha sido registrado') ||
-            $body.text().toLowerCase().includes('ya ha sido registrado');
+                                      $body.text().toLowerCase().includes('ya ha sido registrado');
           if (tieneAvisoDuplicado) {
             cy.registrarResultados({
               numero: parseInt(casoExcel.caso.replace('TC', '')),
@@ -915,8 +1052,8 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .click({ force: true });
         cy.wait(1000);
         cy.get('body').then($body => {
-          const tieneAviso = $body.text().toLowerCase().includes('completa este campo') ||
-            $body.find('input[name="data.name"]:invalid').length > 0;
+          const tieneAviso = $body.text().toLowerCase().includes('completa este campo') || 
+                            $body.find('input[name="data.name"]:invalid').length > 0;
           if (tieneAviso) {
             cy.registrarResultados({
               numero: parseInt(casoExcel.caso.replace('TC', '')),
@@ -939,7 +1076,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
     const descripcion = obtenerDatoPorEtiqueta(casoExcel, 'data.description') || casoExcel.dato_2 || 'prueba';
     const departamento = obtenerDatoPorEtiqueta(casoExcel, 'choices_item') || casoExcel.dato_3 || 'prueba';
     const supervisor = obtenerDatoPorEtiqueta(casoExcel, 'choices_item') || casoExcel.dato_4 || 'admin';
-
+    
     return irAPantallaLimpio('/panelinterno/grupos', 'Grupos')
       .then(() => {
         cy.get('a:contains("Crear grupo"), button:contains("Crear grupo")', { timeout: 10000 })
@@ -966,7 +1103,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
 
   function gruposEditar(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-
+    
     return irAPantallaLimpio('/panelinterno/grupos', 'Grupos')
       .then(() => {
         cy.get('.fi-ta-table, table', { timeout: 10000 }).scrollTo('right', { ensureScrollable: false });
@@ -1037,7 +1174,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
     const nombre = obtenerDatoPorEtiqueta(casoExcel, 'mountedTableActionsData.0.name') || procesarPruebaXXX(casoExcel.dato_1) || 'prueba';
     const apellidos = obtenerDatoPorEtiqueta(casoExcel, 'mountedTableActionsData.0.surname') || casoExcel.dato_2 || 'prueba';
     const email = obtenerDatoPorEtiqueta(casoExcel, 'mountedTableActionsData.0.email') || procesarPruebaXXX(casoExcel.dato_3) || `prueba${generarNumeroAleatorio()}@prueba.app`;
-
+    
     return irAPantallaLimpio('/panelinterno/grupos', 'Grupos')
       .then(() => {
         cy.get('a:contains("Crear grupo"), button:contains("Crear grupo")', { timeout: 10000 })
@@ -1062,13 +1199,13 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .scrollIntoView()
           .click({ force: true });
         cy.wait(2000);
-
+        
         // Esperar a que aparezca el formulario/modal y los campos estén disponibles
         cy.get('input[name="mountedTableActionsData.0.name"], input#mountedTableActionsData\\.0\\.name', { timeout: 15000 })
           .should('be.visible')
           .should('exist');
         cy.wait(500);
-
+        
         // Ahora escribir en los campos
         escribirCampo('input[name="mountedTableActionsData.0.name"], input#mountedTableActionsData\\.0\\.name', nombre);
         cy.wait(300);
@@ -1263,7 +1400,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
     const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || procesarPruebaXXX(casoExcel.dato_1) || `prueba${generarNumeroAleatorio()}`;
     const email = obtenerDatoPorEtiqueta(casoExcel, 'data.email') || procesarPruebaXXX(casoExcel.dato_2) || `prueba${generarNumeroAleatorio()}@prueba.app`;
     const grupo = obtenerDatoPorEtiqueta(casoExcel, 'choices_inner') || casoExcel.dato_3 || 'Admin Group';
-
+    
     return irAPantallaLimpio('/panelinterno/empleados', 'Empleados')
       .then(() => {
         cy.get('a:contains("Crear empleado"), button:contains("Crear empleado")', { timeout: 10000 })
@@ -1499,7 +1636,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
     const email = obtenerDatoPorEtiqueta(casoExcel, 'data.email') || procesarPruebaXXX(casoExcel.dato_1) || `prueba${generarNumeroAleatorio()}@prueba.app`;
     // Obtener el grupo de choices_inner, NO del email
     const grupo = obtenerDatoPorEtiqueta(casoExcel, 'choices_inner') || casoExcel.dato_2 || 'Admin Group';
-
+    
     return irAPantallaLimpio('/panelinterno/empleados', 'Empleados')
       .then(() => {
         cy.get('a:contains("Crear empleado"), button:contains("Crear empleado")', { timeout: 10000 })
@@ -1554,8 +1691,8 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .click({ force: true });
         cy.wait(1000);
         cy.get('body').then($body => {
-          const tieneAviso = $body.text().toLowerCase().includes('completa este campo') ||
-            $body.find('input[name="data.name"]:invalid').length > 0;
+          const tieneAviso = $body.text().toLowerCase().includes('completa este campo') || 
+                            $body.find('input[name="data.name"]:invalid').length > 0;
           if (tieneAviso) {
             cy.registrarResultados({
               numero: parseInt(casoExcel.caso.replace('TC', '')),
@@ -1577,7 +1714,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
     const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || procesarPruebaXXX(casoExcel.dato_1) || `prueba${generarNumeroAleatorio()}`;
     // Obtener el grupo de choices_inner
     const grupo = obtenerDatoPorEtiqueta(casoExcel, 'choices_inner') || casoExcel.dato_2 || 'Admin Group';
-
+    
     return irAPantallaLimpio('/panelinterno/empleados', 'Empleados')
       .then(() => {
         cy.get('a:contains("Crear empleado"), button:contains("Crear empleado")', { timeout: 10000 })
@@ -1631,8 +1768,8 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .click({ force: true });
         cy.wait(1000);
         cy.get('body').then($body => {
-          const tieneAviso = $body.text().toLowerCase().includes('completa este campo') ||
-            $body.find('input[name="data.email"]:invalid').length > 0;
+          const tieneAviso = $body.text().toLowerCase().includes('completa este campo') || 
+                            $body.find('input[name="data.email"]:invalid').length > 0;
           if (tieneAviso) {
             cy.registrarResultados({
               numero: parseInt(casoExcel.caso.replace('TC', '')),
@@ -1653,7 +1790,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
     const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || procesarPruebaXXX(casoExcel.dato_1) || `prueba${generarNumeroAleatorio()}`;
     const email = obtenerDatoPorEtiqueta(casoExcel, 'data.email') || procesarPruebaXXX(casoExcel.dato_2) || `prueba${generarNumeroAleatorio()}@prueba.app`;
-
+    
     return irAPantallaLimpio('/panelinterno/empleados', 'Empleados')
       .then(() => {
         cy.get('a:contains("Crear empleado"), button:contains("Crear empleado")', { timeout: 10000 })
@@ -1681,8 +1818,8 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .click({ force: true });
         cy.wait(1000);
         cy.get('body').then($body => {
-          const tieneAviso = $body.text().toLowerCase().includes('completa este campo') ||
-            $body.text().toLowerCase().includes('grupo') && $body.text().toLowerCase().includes('obligatorio');
+          const tieneAviso = $body.text().toLowerCase().includes('completa este campo') || 
+                            $body.text().toLowerCase().includes('grupo') && $body.text().toLowerCase().includes('obligatorio');
           if (tieneAviso) {
             cy.registrarResultados({
               numero: parseInt(casoExcel.caso.replace('TC', '')),
@@ -1708,7 +1845,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
     const telefono = obtenerDatoPorEtiqueta(casoExcel, 'data.phone') || casoExcel.dato_5 || '123456';
     const departamento = obtenerDatoPorEtiqueta(casoExcel, 'choices_item') || casoExcel.dato_6 || '';
     const roles = obtenerDatoPorEtiqueta(casoExcel, 'choices_inner') || casoExcel.dato_7 || 'Supervisor';
-
+    
     return irAPantallaLimpio('/panelinterno/empleados', 'Empleados')
       .then(() => {
         cy.get('a:contains("Crear empleado"), button:contains("Crear empleado")', { timeout: 10000 })
@@ -1779,7 +1916,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
 
   function empleadosEditar(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-
+    
     return irAPantallaLimpio('/panelinterno/empleados', 'Empleados')
       .then(() => {
         cy.get('.fi-ta-table, table', { timeout: 10000 }).scrollTo('right', { ensureScrollable: false });
@@ -1810,7 +1947,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
   function jornadasDiariasCrearSemanal(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
     const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || procesarPruebaXXX(casoExcel.dato_1) || `prueba${generarNumeroAleatorio()}`;
-
+    
     return irAPantallaLimpio('/panelinterno/jornadas-diarias', 'Jornadas Diarias')
       .then(() => {
         cy.get('a:contains("Crear Jornada Diaria"), button:contains("Crear Jornada Diaria")', { timeout: 10000 })
@@ -1832,7 +1969,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
   function jornadasDiariasCrearDuplicado(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
     const nombre = casoExcel.dato_1 || 'Jornada diaria 1';
-
+    
     return irAPantallaLimpio('/panelinterno/jornadas-diarias', 'Jornadas Diarias')
       .then(() => {
         cy.get('a:contains("Crear Jornada Diaria"), button:contains("Crear Jornada Diaria")', { timeout: 10000 })
@@ -1847,8 +1984,8 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .click({ force: true });
         cy.wait(2000);
         cy.get('body').then($body => {
-          const tieneError = $body.text().toLowerCase().includes('ya ha sido registrado') ||
-            $body.text().toLowerCase().includes('duplicado');
+          const tieneError = $body.text().toLowerCase().includes('ya ha sido registrado') || 
+                            $body.text().toLowerCase().includes('duplicado');
           if (tieneError) {
             cy.registrarResultados({
               numero: parseInt(casoExcel.caso.replace('TC', '')),
@@ -1879,8 +2016,8 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .click({ force: true });
         cy.wait(1000);
         cy.get('body').then($body => {
-          const tieneAviso = $body.text().toLowerCase().includes('completa este campo') ||
-            $body.find('input[name="data.name"]:invalid').length > 0;
+          const tieneAviso = $body.text().toLowerCase().includes('completa este campo') || 
+                            $body.find('input[name="data.name"]:invalid').length > 0;
           if (tieneAviso) {
             cy.registrarResultados({
               numero: parseInt(casoExcel.caso.replace('TC', '')),
@@ -1902,7 +2039,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
     const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || procesarPruebaXXX(casoExcel.dato_1) || `prueba${generarNumeroAleatorio()}`;
     const desde = obtenerDatoPorEtiqueta(casoExcel, 'data.entry_start_window') || casoExcel.dato_2 || '08:00';
     const hasta = obtenerDatoPorEtiqueta(casoExcel, 'data.entry_end_window') || casoExcel.dato_3 || '10:00';
-
+    
     return irAPantallaLimpio('/panelinterno/jornadas-diarias', 'Jornadas Diarias')
       .then(() => {
         cy.get('a:contains("Crear Jornada Diaria"), button:contains("Crear Jornada Diaria")', { timeout: 10000 })
@@ -1920,10 +2057,10 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
               .first()
               .scrollIntoView()
               .then($toggle => {
-                const isChecked = $toggle.attr('aria-checked') === 'true' ||
-                  $toggle.hasClass('checked') ||
-                  $toggle.hasClass('bg-custom-600') ||
-                  $toggle.hasClass('bg-primary-600');
+                const isChecked = $toggle.attr('aria-checked') === 'true' || 
+                                 $toggle.hasClass('checked') || 
+                                 $toggle.hasClass('bg-custom-600') ||
+                                 $toggle.hasClass('bg-primary-600');
                 if (!isChecked) {
                   cy.wrap($toggle).click({ force: true });
                   cy.wait(800); // Esperar a que se active y se habiliten los campos
@@ -1959,7 +2096,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
     const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || procesarPruebaXXX(casoExcel.dato_1) || `prueba${generarNumeroAleatorio()}`;
     const desde = obtenerDatoPorEtiqueta(casoExcel, 'data.exit_start_window') || casoExcel.dato_2 || '15:00';
     const hasta = obtenerDatoPorEtiqueta(casoExcel, 'data.exit_end_window') || casoExcel.dato_3 || '18:00';
-
+    
     return irAPantallaLimpio('/panelinterno/jornadas-diarias', 'Jornadas Diarias')
       .then(() => {
         cy.get('a:contains("Crear Jornada Diaria"), button:contains("Crear Jornada Diaria")', { timeout: 10000 })
@@ -1977,10 +2114,10 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
               .first()
               .scrollIntoView()
               .then($toggle => {
-                const isChecked = $toggle.attr('aria-checked') === 'true' ||
-                  $toggle.hasClass('checked') ||
-                  $toggle.hasClass('bg-custom-600') ||
-                  $toggle.hasClass('bg-primary-600');
+                const isChecked = $toggle.attr('aria-checked') === 'true' || 
+                                 $toggle.hasClass('checked') || 
+                                 $toggle.hasClass('bg-custom-600') ||
+                                 $toggle.hasClass('bg-primary-600');
                 if (!isChecked) {
                   cy.wrap($toggle).click({ force: true });
                   cy.wait(800); // Esperar a que se active y se habiliten los campos
@@ -2016,7 +2153,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
     const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || procesarPruebaXXX(casoExcel.dato_1) || `prueba${generarNumeroAleatorio()}`;
     const minimo = obtenerDatoPorEtiqueta(casoExcel, 'data.duration_min') || casoExcel.dato_2 || '03:00';
     const maximo = obtenerDatoPorEtiqueta(casoExcel, 'data.duration_max') || casoExcel.dato_3 || '10:00';
-
+    
     return irAPantallaLimpio('/panelinterno/jornadas-diarias', 'Jornadas Diarias')
       .then(() => {
         cy.get('a:contains("Crear Jornada Diaria"), button:contains("Crear Jornada Diaria")', { timeout: 10000 })
@@ -2034,10 +2171,10 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
               .first()
               .scrollIntoView()
               .then($toggle => {
-                const isChecked = $toggle.attr('aria-checked') === 'true' ||
-                  $toggle.hasClass('checked') ||
-                  $toggle.hasClass('bg-custom-600') ||
-                  $toggle.hasClass('bg-primary-600');
+                const isChecked = $toggle.attr('aria-checked') === 'true' || 
+                                 $toggle.hasClass('checked') || 
+                                 $toggle.hasClass('bg-custom-600') ||
+                                 $toggle.hasClass('bg-primary-600');
                 if (!isChecked) {
                   cy.wrap($toggle).click({ force: true });
                   cy.wait(800); // Esperar a que se active y se habiliten los campos
@@ -2073,7 +2210,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
     const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || procesarPruebaXXX(casoExcel.dato_1) || `prueba${generarNumeroAleatorio()}`;
     const minimo = obtenerDatoPorEtiqueta(casoExcel, 'data.daily_min_entries') || casoExcel.dato_2 || '1';
     const maximo = obtenerDatoPorEtiqueta(casoExcel, 'data.daily_max_entries') || casoExcel.dato_3 || '3';
-
+    
     return irAPantallaLimpio('/panelinterno/jornadas-diarias', 'Jornadas Diarias')
       .then(() => {
         cy.get('a:contains("Crear Jornada Diaria"), button:contains("Crear Jornada Diaria")', { timeout: 10000 })
@@ -2092,10 +2229,10 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
               .first()
               .scrollIntoView()
               .then($toggle => {
-                const isChecked = $toggle.attr('aria-checked') === 'true' ||
-                  $toggle.hasClass('checked') ||
-                  $toggle.hasClass('bg-custom-600') ||
-                  $toggle.hasClass('bg-primary-600');
+                const isChecked = $toggle.attr('aria-checked') === 'true' || 
+                                 $toggle.hasClass('checked') || 
+                                 $toggle.hasClass('bg-custom-600') ||
+                                 $toggle.hasClass('bg-primary-600');
                 if (!isChecked) {
                   cy.wrap($toggle).click({ force: true });
                   cy.wait(500);
@@ -2113,10 +2250,10 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
               .first()
               .scrollIntoView()
               .then($toggle => {
-                const isChecked = $toggle.attr('aria-checked') === 'true' ||
-                  $toggle.hasClass('checked') ||
-                  $toggle.hasClass('bg-custom-600') ||
-                  $toggle.hasClass('bg-primary-600');
+                const isChecked = $toggle.attr('aria-checked') === 'true' || 
+                                 $toggle.hasClass('checked') || 
+                                 $toggle.hasClass('bg-custom-600') ||
+                                 $toggle.hasClass('bg-primary-600');
                 if (!isChecked) {
                   cy.wrap($toggle).click({ force: true });
                   cy.wait(500);
@@ -2160,7 +2297,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
     const limiteMin = obtenerDatoPorEtiqueta(casoExcel, 'data.daily_min_entries') || casoExcel.dato_8 || '1';
     const limiteMax = obtenerDatoPorEtiqueta(casoExcel, 'data.daily_max_entries') || casoExcel.dato_9 || '3';
     const horaReinicio = obtenerDatoPorEtiqueta(casoExcel, 'data.reset_at') || casoExcel.dato_10 || '11:00';
-
+    
     return irAPantallaLimpio('/panelinterno/jornadas-diarias', 'Jornadas Diarias')
       .then(() => {
         cy.get('a:contains("Crear Jornada Diaria"), button:contains("Crear Jornada Diaria")', { timeout: 10000 })
@@ -2169,7 +2306,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
         cy.wait(1000);
         escribirCampo('input[name="data.name"], input#data\\.name', nombre);
         cy.wait(500);
-
+        
         // Activar y rellenar Rango de inicio - PRIMERO activar el toggle
         cy.contains('label, span, div, p', /activar.*rango.*inicio|activar.*rango.*para.*iniciar/i, { timeout: 10000 })
           .first()
@@ -2180,10 +2317,10 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
               .scrollIntoView()
               .then($toggle => {
                 // Verificar si está activado por aria-checked o clases
-                const isChecked = $toggle.attr('aria-checked') === 'true' ||
-                  $toggle.hasClass('checked') ||
-                  $toggle.hasClass('bg-custom-600') ||
-                  $toggle.hasClass('bg-primary-600');
+                const isChecked = $toggle.attr('aria-checked') === 'true' || 
+                                 $toggle.hasClass('checked') || 
+                                 $toggle.hasClass('bg-custom-600') ||
+                                 $toggle.hasClass('bg-primary-600');
                 if (!isChecked) {
                   cy.wrap($toggle).click({ force: true });
                   cy.wait(800); // Esperar a que se active y se habiliten los campos
@@ -2209,10 +2346,10 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
               .first()
               .scrollIntoView()
               .then($toggle => {
-                const isChecked = $toggle.attr('aria-checked') === 'true' ||
-                  $toggle.hasClass('checked') ||
-                  $toggle.hasClass('bg-custom-600') ||
-                  $toggle.hasClass('bg-primary-600');
+                const isChecked = $toggle.attr('aria-checked') === 'true' || 
+                                 $toggle.hasClass('checked') || 
+                                 $toggle.hasClass('bg-custom-600') ||
+                                 $toggle.hasClass('bg-primary-600');
                 if (!isChecked) {
                   cy.wrap($toggle).click({ force: true });
                   cy.wait(800); // Esperar a que se active y se habiliten los campos
@@ -2238,10 +2375,10 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
               .first()
               .scrollIntoView()
               .then($toggle => {
-                const isChecked = $toggle.attr('aria-checked') === 'true' ||
-                  $toggle.hasClass('checked') ||
-                  $toggle.hasClass('bg-custom-600') ||
-                  $toggle.hasClass('bg-primary-600');
+                const isChecked = $toggle.attr('aria-checked') === 'true' || 
+                                 $toggle.hasClass('checked') || 
+                                 $toggle.hasClass('bg-custom-600') ||
+                                 $toggle.hasClass('bg-primary-600');
                 if (!isChecked) {
                   cy.wrap($toggle).click({ force: true });
                   cy.wait(800); // Esperar a que se active y se habiliten los campos
@@ -2266,17 +2403,17 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
             const text = (el.innerText || el.textContent || '').trim().toLowerCase();
             return text.includes('activar') && text.includes('límite') && text.includes('mínimo');
           }).first();
-
+          
           if ($labelMin.length) {
             // Buscar el toggle asociado en el mismo contenedor
             const $container = $labelMin.closest('fieldset, div, section, .fi-field, .fi-fo-field-wrp');
             const $toggle = $container.find('button[role="switch"], button.fi-fo-toggle, [role="switch"]').first();
             if ($toggle.length) {
               cy.wrap($toggle).scrollIntoView().then($t => {
-                const isChecked = $t.attr('aria-checked') === 'true' ||
-                  $t.hasClass('checked') ||
-                  $t.hasClass('bg-custom-600') ||
-                  $t.hasClass('bg-primary-600');
+                const isChecked = $t.attr('aria-checked') === 'true' || 
+                                 $t.hasClass('checked') || 
+                                 $t.hasClass('bg-custom-600') ||
+                                 $t.hasClass('bg-primary-600');
                 if (!isChecked) {
                   cy.wrap($toggle).click({ force: true });
                   cy.wait(600);
@@ -2287,7 +2424,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
             }
           }
         });
-
+        
         // Activar límite máximo - buscar específicamente el texto exacto
         cy.get('body').then($body => {
           // Buscar el label o texto que contenga exactamente "Activar límite máximo"
@@ -2295,17 +2432,17 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
             const text = (el.innerText || el.textContent || '').trim().toLowerCase();
             return text.includes('activar') && text.includes('límite') && text.includes('máximo');
           }).first();
-
+          
           if ($labelMax.length) {
             // Buscar el toggle asociado en el mismo contenedor
             const $container = $labelMax.closest('fieldset, div, section, .fi-field, .fi-fo-field-wrp');
             const $toggle = $container.find('button[role="switch"], button.fi-fo-toggle, [role="switch"]').first();
             if ($toggle.length) {
               cy.wrap($toggle).scrollIntoView().then($t => {
-                const isChecked = $t.attr('aria-checked') === 'true' ||
-                  $t.hasClass('checked') ||
-                  $t.hasClass('bg-custom-600') ||
-                  $t.hasClass('bg-primary-600');
+                const isChecked = $t.attr('aria-checked') === 'true' || 
+                                 $t.hasClass('checked') || 
+                                 $t.hasClass('bg-custom-600') ||
+                                 $t.hasClass('bg-primary-600');
                 if (!isChecked) {
                   cy.wrap($toggle).click({ force: true });
                   cy.wait(600);
@@ -2337,7 +2474,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
 
   function jornadasDiariasEditar(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-
+    
     return irAPantallaLimpio('/panelinterno/jornadas-diarias', 'Jornadas Diarias')
       .then(() => {
         cy.get('.fi-ta-table, table', { timeout: 10000 }).scrollTo('right', { ensureScrollable: false });
@@ -2370,7 +2507,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
     const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || procesarPruebaXXX(casoExcel.dato_1) || `prueba${generarNumeroAleatorio()}`;
     const horas = obtenerDatoPorEtiqueta(casoExcel, 'data.weekly_hours_hours') || casoExcel.dato_2 || '40';
     const minutos = obtenerDatoPorEtiqueta(casoExcel, 'data.weekly_hours_minutes') || casoExcel.dato_3 || '0';
-
+    
     return irAPantallaLimpio('/panelinterno/jornada-semanal', 'Jornada Semanal')
       .then(() => {
         cy.get('a:contains("Crear Jornada Semanal"), button:contains("Crear Jornada Semanal")', { timeout: 10000 })
@@ -2403,14 +2540,20 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .scrollIntoView({ ensureScrollable: false })
           .click({ force: true });
         cy.wait(2000);
+        // Verificar error 500 después de crear
+        return verificarError500DespuesCrearJornadaSemanal(casoExcel, 37).then((huboError) => {
+          if (huboError) {
+            return cy.wrap(null); // Si hubo error, parar aquí
+          }
         return cy.wrap(true);
+        });
       });
   }
 
   function jornadaSemanalCrearDuplicado(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
     const nombre = casoExcel.dato_1 || 'Jornada semanal 1';
-
+    
     return irAPantallaLimpio('/panelinterno/jornada-semanal', 'Jornada Semanal')
       .then(() => {
         cy.get('a:contains("Crear Jornada Semanal"), button:contains("Crear Jornada Semanal")', { timeout: 10000 })
@@ -2424,9 +2567,15 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .scrollIntoView()
           .click({ force: true });
         cy.wait(2000);
+        // Verificar error 500 después de crear
+        return verificarError500DespuesCrearJornadaSemanal(casoExcel, 38).then((huboError) => {
+          if (huboError) {
+            return cy.wrap(null); // Si hubo error, parar aquí
+          }
+          // Si no hay error 500, verificar si hay error de duplicado
         cy.get('body').then($body => {
-          const tieneError = $body.text().toLowerCase().includes('ya ha sido registrado') ||
-            $body.text().toLowerCase().includes('duplicado');
+          const tieneError = $body.text().toLowerCase().includes('ya ha sido registrado') || 
+                            $body.text().toLowerCase().includes('duplicado');
           if (tieneError) {
             cy.registrarResultados({
               numero: parseInt(casoExcel.caso.replace('TC', '')),
@@ -2440,6 +2589,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           }
         });
         return cy.wrap(true);
+        });
       });
   }
 
@@ -2457,8 +2607,8 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .click({ force: true });
         cy.wait(1000);
         cy.get('body').then($body => {
-          const tieneAviso = $body.text().toLowerCase().includes('completa este campo') ||
-            $body.find('input[name="data.name"]:invalid').length > 0;
+          const tieneAviso = $body.text().toLowerCase().includes('completa este campo') || 
+                            $body.find('input[name="data.name"]:invalid').length > 0;
           if (tieneAviso) {
             cy.registrarResultados({
               numero: parseInt(casoExcel.caso.replace('TC', '')),
@@ -2480,7 +2630,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
     const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || procesarPruebaXXX(casoExcel.dato_1) || `prueba${generarNumeroAleatorio()}`;
     const horas = obtenerDatoPorEtiqueta(casoExcel, 'data.weekly_hours_hours') || casoExcel.dato_2 || '100';
     const minutos = obtenerDatoPorEtiqueta(casoExcel, 'data.weekly_hours_minutes') || casoExcel.dato_3 || '0';
-
+    
     return irAPantallaLimpio('/panelinterno/jornada-semanal', 'Jornada Semanal')
       .then(() => {
         cy.get('a:contains("Crear Jornada Semanal"), button:contains("Crear Jornada Semanal")', { timeout: 10000 })
@@ -2496,9 +2646,15 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .scrollIntoView()
           .click({ force: true });
         cy.wait(2000);
+        // Verificar error 500 después de crear
+        return verificarError500DespuesCrearJornadaSemanal(casoExcel, 40).then((huboError) => {
+          if (huboError) {
+            return cy.wrap(null); // Si hubo error, parar aquí
+          }
+          // Si no hay error 500, verificar si hay error de validación
         cy.get('body').then($body => {
-          const tieneError = $body.text().toLowerCase().includes('inferior o igual a 80') ||
-            $body.text().toLowerCase().includes('máximo');
+          const tieneError = $body.text().toLowerCase().includes('inferior o igual a 80') || 
+                            $body.text().toLowerCase().includes('máximo');
           if (tieneError) {
             cy.registrarResultados({
               numero: parseInt(casoExcel.caso.replace('TC', '')),
@@ -2512,6 +2668,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           }
         });
         return cy.wrap(true);
+        });
       });
   }
 
@@ -2520,7 +2677,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
     const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || procesarPruebaXXX(casoExcel.dato_1) || `prueba${generarNumeroAleatorio()}`;
     const horas = obtenerDatoPorEtiqueta(casoExcel, 'data.weekly_hours_hours') || casoExcel.dato_2 || '-2';
     const minutos = obtenerDatoPorEtiqueta(casoExcel, 'data.weekly_hours_minutes') || casoExcel.dato_3 || '0';
-
+    
     return irAPantallaLimpio('/panelinterno/jornada-semanal', 'Jornada Semanal')
       .then(() => {
         cy.get('a:contains("Crear Jornada Semanal"), button:contains("Crear Jornada Semanal")', { timeout: 10000 })
@@ -2537,9 +2694,15 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .scrollIntoView()
           .click({ force: true });
         cy.wait(2000);
+        // Verificar error 500 después de crear
+        return verificarError500DespuesCrearJornadaSemanal(casoExcel, 41).then((huboError) => {
+          if (huboError) {
+            return cy.wrap(null); // Si hubo error, parar aquí
+          }
+          // Si no hay error 500, verificar si hay error de validación
         cy.get('body').then($body => {
-          const tieneError = $body.text().toLowerCase().includes('superior o igual a 0') ||
-            $body.text().toLowerCase().includes('mínimo');
+          const tieneError = $body.text().toLowerCase().includes('superior o igual a 0') || 
+                            $body.text().toLowerCase().includes('mínimo');
           if (tieneError) {
             cy.registrarResultados({
               numero: parseInt(casoExcel.caso.replace('TC', '')),
@@ -2553,12 +2716,13 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           }
         });
         return cy.wrap(true);
+        });
       });
   }
 
   function jornadaSemanalEditar(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-
+    
     return irAPantallaLimpio('/panelinterno/jornada-semanal', 'Jornada Semanal')
       .then(() => {
         cy.get('.fi-ta-table, table', { timeout: 10000 }).scrollTo('right', { ensureScrollable: false });
@@ -2585,7 +2749,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
     const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || procesarPruebaXXX(casoExcel.dato_1) || `prueba${generarNumeroAleatorio()}`;
     const horas = obtenerDatoPorEtiqueta(casoExcel, 'data.weekly_hours_hours') || casoExcel.dato_2 || '40';
     const minutos = obtenerDatoPorEtiqueta(casoExcel, 'data.weekly_hours_minutes') || casoExcel.dato_3 || '70';
-
+    
     return irAPantallaLimpio('/panelinterno/jornada-semanal', 'Jornada Semanal')
       .then(() => {
         cy.get('a:contains("Crear Jornada Semanal"), button:contains("Crear Jornada Semanal")', { timeout: 10000 })
@@ -2602,9 +2766,15 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .scrollIntoView()
           .click({ force: true });
         cy.wait(2000);
+        // Verificar error 500 después de crear
+        return verificarError500DespuesCrearJornadaSemanal(casoExcel, 43).then((huboError) => {
+          if (huboError) {
+            return cy.wrap(null); // Si hubo error, parar aquí
+          }
+          // Si no hay error 500, verificar si hay error de validación
         cy.get('body').then($body => {
-          const tieneError = $body.text().toLowerCase().includes('inferior o igual a 59') ||
-            $body.text().toLowerCase().includes('máximo');
+          const tieneError = $body.text().toLowerCase().includes('inferior o igual a 59') || 
+                            $body.text().toLowerCase().includes('máximo');
           if (tieneError) {
             cy.registrarResultados({
               numero: parseInt(casoExcel.caso.replace('TC', '')),
@@ -2618,6 +2788,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           }
         });
         return cy.wrap(true);
+        });
       });
   }
 
@@ -2626,7 +2797,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
     const nombre = obtenerDatoPorEtiqueta(casoExcel, 'data.name') || procesarPruebaXXX(casoExcel.dato_1) || `prueba${generarNumeroAleatorio()}`;
     const horas = obtenerDatoPorEtiqueta(casoExcel, 'data.weekly_hours_hours') || casoExcel.dato_2 || '40';
     const minutos = obtenerDatoPorEtiqueta(casoExcel, 'data.weekly_hours_minutes') || casoExcel.dato_3 || '-2';
-
+    
     return irAPantallaLimpio('/panelinterno/jornada-semanal', 'Jornada Semanal')
       .then(() => {
         cy.get('a:contains("Crear Jornada Semanal"), button:contains("Crear Jornada Semanal")', { timeout: 10000 })
@@ -2643,9 +2814,15 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .scrollIntoView()
           .click({ force: true });
         cy.wait(2000);
+        // Verificar error 500 después de crear
+        return verificarError500DespuesCrearJornadaSemanal(casoExcel, 44).then((huboError) => {
+          if (huboError) {
+            return cy.wrap(null); // Si hubo error, parar aquí
+          }
+          // Si no hay error 500, verificar si hay error de validación
         cy.get('body').then($body => {
-          const tieneError = $body.text().toLowerCase().includes('superior o igual a 0') ||
-            $body.text().toLowerCase().includes('mínimo');
+          const tieneError = $body.text().toLowerCase().includes('superior o igual a 0') || 
+                            $body.text().toLowerCase().includes('mínimo');
           if (tieneError) {
             cy.registrarResultados({
               numero: parseInt(casoExcel.caso.replace('TC', '')),
@@ -2659,13 +2836,14 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           }
         });
         return cy.wrap(true);
+        });
       });
   }
 
   function jornadaSemanalAnadirTiposJornada(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
     const jornadaDiaria = obtenerDatoPorEtiqueta(casoExcel, 'jornada') || casoExcel.dato_1 || '';
-
+    
     return irAPantallaLimpio('/panelinterno/jornada-semanal', 'Jornada Semanal')
       .then(() => {
         // Abrir formulario de edición
@@ -2676,11 +2854,11 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .click({ force: true });
         cy.url({ timeout: 10000 }).should('match', /\/jornada-semanal\/.+\/edit/);
         cy.wait(1000);
-
+        
         // Scroll al final para encontrar la sección "Asignar jornadas diarias"
         cy.scrollTo('bottom', { duration: 500 });
         cy.wait(300);
-
+        
         // Buscar y hacer clic en el botón "Añadir Jornada diaria"
         cy.contains('button, a', /Añadir Jornada diaria/i, { timeout: 10000 })
           .filter(':visible')
@@ -2688,7 +2866,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
           .scrollIntoView()
           .click({ force: true });
         cy.wait(600);
-
+        
         // Esperar a que se abra el modal
         cy.get('.fi-modal:visible, [role="dialog"]:visible', { timeout: 10000 })
           .should('be.visible')
