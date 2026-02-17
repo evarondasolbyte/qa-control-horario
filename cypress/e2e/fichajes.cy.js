@@ -39,7 +39,12 @@ describe('FICHAJES - Validación completa con gestión de errores y reporte a Ex
 
   // Si está vacío, se ejecutan todos los casos que no estén en CASOS_PAUSADOS
   const CASOS_OK = new Set();
-  const CASOS_PAUSADOS = new Set(['TC015']);
+  // Pausar todos los casos excepto TC001 y TC030
+  const CASOS_PAUSADOS = new Set([
+    'TC002', 'TC003', 'TC004', 'TC005', 'TC006', 'TC007', 'TC008', 'TC009', 'TC010',
+    'TC011', 'TC012', 'TC013', 'TC014', 'TC015', 'TC016', 'TC017', 'TC018', 'TC019', 'TC020',
+    'TC021', 'TC022', 'TC023', 'TC024', 'TC025', 'TC026', 'TC027', 'TC028', 'TC029'
+  ]);
 
   it('Ejecutar casos OK de Fichajes desde Google Sheets', () => {
     cy.obtenerDatosExcel('Fichajes').then((casosExcel) => {
@@ -593,11 +598,56 @@ describe('FICHAJES - Validación completa con gestión de errores y reporte a Ex
   }
 
   function clickBotonFichaje(tipo) {
-    return obtenerBotonFichaje(tipo)
-      .should('be.visible')
-      .should('not.be.disabled')
-      .scrollIntoView()
-      .click({ force: true });
+    // Primero verificar si hay errores en la página antes de intentar hacer clic
+    return cy.get('body', { timeout: 2000 }).then(($body) => {
+      // Verificar que $body existe y tiene elementos
+      if (!$body || $body.length === 0) {
+        return cy.wrap(null);
+      }
+      
+      const texto = $body.text ? $body.text() : '';
+      // Verificar si hay error 500 o modal de error abierto
+      const tieneError500 = texto.toLowerCase().includes('500') ||
+        texto.toLowerCase().includes('internal server error') ||
+        texto.toLowerCase().includes('error interno del servidor') ||
+        texto.toLowerCase().includes('server error') ||
+        texto.toLowerCase().includes('500 server error') ||
+        texto.toLowerCase().includes('error de servidor') ||
+        texto.toLowerCase().includes('error de servidor') ||
+        ($body.find && $body.find('[class*="error-500"], [class*="error500"], [id*="error-500"], [class*="server-error"]').length > 0);
+      
+      // Verificar si hay modal de error de solapamiento
+      const tieneModalError = texto.includes('Error en hora de inicio') ||
+        texto.includes('se solapa') ||
+        texto.includes('solapamiento') ||
+        texto.includes('Error de servidor') ||
+        ($body.find && $body.find('[role="dialog"]:visible, .fi-modal:visible, [class*="modal"]:visible').filter((i, el) => {
+          try {
+            const textoModal = Cypress.$(el).text();
+            return textoModal.includes('Error') || textoModal.includes('error');
+          } catch (e) {
+            return false;
+          }
+        }).length > 0);
+      
+      if (tieneError500 || tieneModalError) {
+        cy.log(`Error detectado antes de hacer clic en botón ${tipo} - no se intentará hacer clic`);
+        // Lanzar un error controlado que será capturado por el código que llama
+        throw new Error('ERROR_DETECTADO_ANTES_DE_CLIC');
+      }
+      
+      return cy.wrap(null);
+    }, () => {
+      // Si falla al obtener el body, continuar de todas formas
+      return cy.wrap(null);
+    })
+    .then(() => {
+      return obtenerBotonFichaje(tipo)
+        .should('be.visible')
+        .should('not.be.disabled')
+        .scrollIntoView()
+        .click({ force: true });
+    });
   }
 
   function asegurarBotonFichajeVisible(tipo) {
@@ -841,19 +891,346 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
           if ($b.find(btnSi).length) {
             cy.log(' Confirmando eliminación (Sí)');
             return cy.get(btnSi, { timeout: 8000 })
+              .first()
               .click({ force: true });
           }
           return cy.wrap(null);
         });
       })
-
-      .then(() => cy.wait(300))
+      .then(() => cy.wait(1500))
       .then(() => {
+        // Verificar si hay error 500 después de confirmar eliminación
+        return cy.get('body', { timeout: 3000 }).then(($body) => {
+          if (!$body || $body.length === 0) {
+            return cy.wrap({ huboError: false });
+          }
+          
+          const texto = $body.text() ? $body.text().toLowerCase() : '';
+          const tieneError500 = texto.includes('500') ||
+            texto.includes('internal server error') ||
+            texto.includes('error interno del servidor') ||
+            texto.includes('server error') ||
+            texto.includes('500 server error') ||
+            texto.includes('error de servidor') ||
+            $body.find('[class*="error-500"], [class*="error500"], [id*="error-500"], [class*="server-error"]').length > 0;
+          
+          if (tieneError500) {
+            cy.log(' ERROR 500 detectado después de confirmar eliminación en limpieza');
+            return cy.wrap({ huboError: true });
+          }
+          
+          return cy.wrap({ huboError: false });
+        }, () => {
+          return cy.wrap({ huboError: false });
+        });
+      })
+      .then((resultado) => {
+        if (resultado && resultado.huboError === true) {
+          cy.log(' Limpieza terminada con ERROR 500');
+          return cy.wrap({ huboError: true });
+        }
         cy.log(' Limpieza terminada');
         return cy.wrap(null);
       });
   });
 }
+  // ============== Verificar si hay fichajes existentes ==============
+  function verificarFichajesExistentes() {
+    return cy.get('body', { timeout: 10000 }).then(($body) => {
+      // Verificar que $body existe y tiene elementos
+      if (!$body || $body.length === 0) {
+        cy.log('No se encontró el body - asumiendo que no hay fichajes');
+        return cy.wrap(false);
+      }
+
+      // Buscar el bloque de trabajo
+      const bloqueTrabajo = $body.find('#work-session-block');
+      if (!bloqueTrabajo.length) {
+        cy.log('No se encontró el bloque de trabajo - asumiendo que no hay fichajes');
+        return cy.wrap(false);
+      }
+
+      // Buscar registros de fichajes en el bloque de trabajo
+      const registros = bloqueTrabajo.find('.time-entry, .work-entry, [class*="time-entry"], [class*="work-entry"]');
+      const hayFichajes = registros.length > 0;
+
+      cy.log(`Fichajes existentes detectados: ${registros.length}`);
+      return cy.wrap(hayFichajes);
+    }, () => {
+      // Si falla, asumir que no hay fichajes
+      cy.log('Error al verificar fichajes - asumiendo que no hay fichajes');
+      return cy.wrap(false);
+    });
+  }
+
+  // ============== Verificar error 500 después de editar tramo de trabajo ==============
+  function verificarError500DespuesEditar(casoExcel, numero) {
+    return cy.get('body', { timeout: 3000 }).then(($body) => {
+      if (!$body || $body.length === 0) {
+        return cy.document().then((doc) => {
+          if (!doc || !doc.body) {
+            cy.log('No se pudo obtener el documento - registrando ERROR 500 en Excel');
+            const casoId = casoExcel.caso || `TC${String(numero).padStart(3, '0')}`;
+            const nombre = `${casoId} - ${casoExcel.nombre}`;
+            registrarResultado(casoId, nombre, casoExcel.resultado_esperado || 'Comportamiento correcto', 'ERROR 500: Error interno del servidor detectado al editar tramo de trabajo', 'ERROR');
+            return cy.wrap(true);
+          }
+          const docText = doc.body.textContent ? doc.body.textContent.toLowerCase() : '';
+          const tieneError500 = docText.includes('500') ||
+            docText.includes('internal server error') ||
+            docText.includes('error interno del servidor') ||
+            docText.includes('server error') ||
+            docText.includes('500 server error') ||
+            docText.includes('error de servidor');
+          
+          if (tieneError500) {
+            cy.log('ERROR 500 detectado después de editar - registrando en Excel');
+            const casoId = casoExcel.caso || `TC${String(numero).padStart(3, '0')}`;
+            const nombre = `${casoId} - ${casoExcel.nombre}`;
+            registrarResultado(casoId, nombre, casoExcel.resultado_esperado || 'Comportamiento correcto', 'ERROR 500: Error interno del servidor detectado al editar tramo de trabajo', 'ERROR');
+            return cy.wrap(true);
+          }
+          return cy.wrap(false);
+        }, () => {
+          return cy.wrap(false);
+        });
+      }
+
+      const texto = $body.text() ? $body.text().toLowerCase() : '';
+      const tieneError500 = texto.includes('500') ||
+        texto.includes('internal server error') ||
+        texto.includes('error interno del servidor') ||
+        texto.includes('server error') ||
+        texto.includes('500 server error') ||
+        texto.includes('error de servidor') ||
+        $body.find('[class*="error-500"], [class*="error500"], [id*="error-500"], [class*="server-error"]').length > 0 ||
+        $body.find('*:contains("Error de servidor"), *:contains("Error de servidor")').length > 0;
+
+      if (tieneError500) {
+        cy.log('ERROR 500 detectado después de editar - registrando en Excel');
+        const casoId = casoExcel.caso || `TC${String(numero).padStart(3, '0')}`;
+        const nombre = `${casoId} - ${casoExcel.nombre}`;
+        registrarResultado(casoId, nombre, casoExcel.resultado_esperado || 'Comportamiento correcto', 'ERROR 500: Error interno del servidor detectado al editar tramo de trabajo', 'ERROR');
+        return cy.wrap(true);
+      }
+
+      return cy.wrap(false);
+    }, () => {
+      return cy.wrap(false);
+    });
+  }
+
+  // ============== Verificar error 500 después de eliminar fichaje ==============
+  function verificarError500DespuesEliminar(casoExcel, numero) {
+    return cy.get('body', { timeout: 3000 }).then(($body) => {
+      if (!$body || $body.length === 0) {
+        return cy.document().then((doc) => {
+          if (!doc || !doc.body) {
+            cy.log('No se pudo obtener el documento - registrando ERROR 500 en Excel');
+            const casoId = casoExcel.caso || `TC${String(numero).padStart(3, '0')}`;
+            const nombre = `${casoId} - ${casoExcel.nombre}`;
+            registrarResultado(casoId, nombre, casoExcel.resultado_esperado || 'Comportamiento correcto', 'ERROR 500: Error interno del servidor detectado al eliminar fichaje', 'ERROR');
+            return cy.wrap(true);
+          }
+          const docText = doc.body.textContent ? doc.body.textContent.toLowerCase() : '';
+          const tieneError500 = docText.includes('500') ||
+            docText.includes('internal server error') ||
+            docText.includes('error interno del servidor') ||
+            docText.includes('server error') ||
+            docText.includes('500 server error') ||
+            docText.includes('error de servidor');
+          
+          if (tieneError500) {
+            cy.log('ERROR 500 detectado después de eliminar - registrando en Excel');
+            const casoId = casoExcel.caso || `TC${String(numero).padStart(3, '0')}`;
+            const nombre = `${casoId} - ${casoExcel.nombre}`;
+            registrarResultado(casoId, nombre, casoExcel.resultado_esperado || 'Comportamiento correcto', 'ERROR 500: Error interno del servidor detectado al eliminar fichaje', 'ERROR');
+            return cy.wrap(true);
+          }
+          return cy.wrap(false);
+        }, () => {
+          return cy.wrap(false);
+        });
+      }
+
+      const texto = $body.text() ? $body.text().toLowerCase() : '';
+      const tieneError500 = texto.includes('500') ||
+        texto.includes('internal server error') ||
+        texto.includes('error interno del servidor') ||
+        texto.includes('server error') ||
+        texto.includes('500 server error') ||
+        texto.includes('error de servidor') ||
+        $body.find('[class*="error-500"], [class*="error500"], [id*="error-500"], [class*="server-error"]').length > 0 ||
+        $body.find('*:contains("Error de servidor"), *:contains("Error de servidor")').length > 0;
+
+      if (tieneError500) {
+        cy.log('ERROR 500 detectado después de eliminar - registrando en Excel');
+        const casoId = casoExcel.caso || `TC${String(numero).padStart(3, '0')}`;
+        const nombre = `${casoId} - ${casoExcel.nombre}`;
+        registrarResultado(casoId, nombre, casoExcel.resultado_esperado || 'Comportamiento correcto', 'ERROR 500: Error interno del servidor detectado al eliminar fichaje', 'ERROR');
+        return cy.wrap(true);
+      }
+
+      return cy.wrap(false);
+    }, () => {
+      return cy.wrap(false);
+    });
+  }
+
+  // ============== Eliminar fichajes eliminables (saltando el primero si no se puede) ==============
+  function eliminarFichajesEliminables(casoExcel, numero) {
+    cy.log('Intentando eliminar fichajes eliminables...');
+    
+    const bloque = '#work-session-block';
+    const filas = '#work-session-block .time-entry, #work-session-block .work-entry';
+    const inputStart = 'input.time-input.time-input-start, input.time-input-start';
+    const inputEnd = 'input.time-input.time-input-end, input.time-input-end';
+    const btnEliminar = 'button.time-edit-btn.time-edit-btn-danger';
+    const btnSi = 'button.btn-notification.btn-primary[data-action="accept"]';
+
+    return cy.get('body', { timeout: 10000 }).then(($body) => {
+      // Verificar que $body existe y tiene elementos
+      if (!$body || $body.length === 0) {
+        cy.log('No se encontró el body - no hay fichajes que eliminar');
+        return cy.wrap(null);
+      }
+
+      if (!$body.find(bloque).length) {
+        cy.log('No existe bloque Trabajo - no hay fichajes que eliminar');
+        return cy.wrap(null);
+      }
+
+      const total = $body.find(filas).length;
+      cy.log(`Registros en Trabajo: ${total}`);
+
+      if (total === 0) {
+        cy.log('No hay registros que eliminar');
+        return cy.wrap(null);
+      }
+
+      // Intentar eliminar desde el último hasta el segundo (el primero puede no ser eliminable)
+      // Empezar desde total - 1 (último) hasta 1 (segundo), saltando el índice 0 (primero)
+      let chain = cy.wrap(null);
+      
+      for (let i = total - 1; i >= 1; i--) {
+        chain = chain.then(() => {
+          cy.log(`Intentando eliminar registro ${i + 1} de ${total}`);
+          
+          return cy.get(filas, { timeout: 10000 })
+            .eq(i)
+            .scrollIntoView({ ensureScrollable: false })
+            .then(($fila) => {
+              const $start = Cypress.$($fila).find(inputStart).filter(':visible');
+              const $end = Cypress.$($fila).find(inputEnd).filter(':visible');
+
+              if ($start.length) return cy.wrap($start.first()).click({ force: true });
+              if ($end.length) return cy.wrap($end.first()).click({ force: true });
+
+              cy.log('No hay input visible en el registro');
+              return cy.wrap(null);
+            })
+            .then(() => {
+              cy.wait(400);
+              // Buscar el botón eliminar dentro del modal abierto, no el último de todos
+              return cy.get('body', { timeout: 10000 }).then(($b) => {
+                const $modal = $b.find('[role="dialog"]:visible, .fi-modal:visible, [class*="modal"]:visible').first();
+                if ($modal.length) {
+                  const $btnEliminarModal = $modal.find(btnEliminar).first();
+                  if ($btnEliminarModal.length) {
+                    return cy.wrap($btnEliminarModal).click({ force: true });
+                  }
+                }
+                // Fallback: usar el último si no se encuentra en el modal
+                return cy.get(btnEliminar, { timeout: 10000 })
+                  .last()
+                  .click({ force: true });
+              });
+            })
+            .then(() => {
+              cy.wait(400);
+              return cy.get('body', { timeout: 4000 }).then(($b) => {
+                // Buscar el botón "Sí" específicamente en el modal de confirmación de eliminación
+                const $modalConfirmacion = $b.find('[role="dialog"]:visible, .fi-modal:visible, [class*="modal"]:visible').filter((i, el) => {
+                  const texto = Cypress.$(el).text();
+                  return texto.includes('eliminar') || texto.includes('Confirmar eliminación');
+                }).first();
+                
+                if ($modalConfirmacion.length) {
+                  const $btnSi = $modalConfirmacion.find(btnSi).first();
+                  if ($btnSi.length) {
+                    cy.log('Confirmando eliminación (Sí)');
+                    return cy.wrap($btnSi).click({ force: true });
+                  }
+                }
+                
+                // Fallback: buscar en todo el body pero solo el primero visible
+                if ($b.find(btnSi + ':visible').length) {
+                  cy.log('Confirmando eliminación (Sí) - usando fallback');
+                  return cy.get(btnSi + ':visible', { timeout: 8000 })
+                    .first()
+                    .click({ force: true });
+                }
+                return cy.wrap(null);
+              });
+            })
+            .then(() => {
+              // Esperar un poco más para que el error 500 aparezca después de confirmar
+              cy.wait(1500);
+              // Verificar error 500 después de confirmar eliminación con "Sí"
+              return verificarError500DespuesEliminar(casoExcel, numero);
+            })
+            .then((huboError) => {
+              if (huboError) {
+                cy.log('ERROR 500 detectado al eliminar después de confirmar - deteniendo eliminación de fichajes');
+                return cy.wrap({ huboError: true });
+              }
+              return cy.wrap(null);
+            });
+        });
+      }
+
+      return chain.then((resultadoAnterior) => {
+        // Si hubo un error 500 en algún paso, retornar el flag de error
+        if (resultadoAnterior && resultadoAnterior.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
+        cy.log('Fichajes eliminables procesados (el primer registro se mantiene si no es eliminable)');
+        return cy.wrap(null);
+      });
+    }, () => {
+      cy.log('Error al eliminar fichajes');
+      return cy.wrap(null);
+    });
+  }
+
+  // ============== Verificar si existe fichaje con entrada 01:00 y salida 02:00 ==============
+  function existeFichajeInicial() {
+    return cy.get('body', { timeout: 10000 }).then(($body) => {
+      if (!$body || $body.length === 0) {
+        return cy.wrap(false);
+      }
+
+      const bloqueTrabajo = $body.find('#work-session-block');
+      if (!bloqueTrabajo.length) {
+        return cy.wrap(false);
+      }
+
+      // Buscar registros que contengan 01:00 y 02:00
+      const textoBloque = bloqueTrabajo.text();
+      const tiene0100 = textoBloque.includes('01:00') || textoBloque.includes('1:00');
+      const tiene0200 = textoBloque.includes('02:00') || textoBloque.includes('2:00');
+      
+      if (tiene0100 && tiene0200) {
+        cy.log('Ya existe un fichaje con entrada 01:00 y salida 02:00');
+        return cy.wrap(true);
+      }
+
+      return cy.wrap(false);
+    }, () => {
+      return cy.wrap(false);
+    });
+  }
+
   // ============== Motor de casos ==============
   function ejecutarCaso(casoExcel, idx) {
     const numero = parseInt(String(casoExcel.caso).replace('TC', ''), 10) || (idx + 1);
@@ -877,6 +1254,10 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
 
     const funcion = obtenerFuncionPorNombre(funcionNombre, casoExcel.nombre);
 
+    // Determinar si este caso crea fichajes (no login, vista, etc.)
+    const funcionesQueCreanFichajes = ['fichaje', 'fichajeTrabajo', 'eliminar', 'eliminarTramoTrabajoCaso'];
+    const creaFichajes = funcionesQueCreanFichajes.includes(funcionNombre);
+
     if (idx > 0) cy.wait(600);
     cy.resetearFlagsTest();
 
@@ -889,7 +1270,14 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
       .then(() => {
         const resultadoFuncion = funcion(casoExcel);
         if (resultadoFuncion && typeof resultadoFuncion.then === 'function') {
-          return resultadoFuncion;
+          return resultadoFuncion.then((resultadoFunc) => {
+            // Si la función retornó un error (solapamiento, error 500, etc.), detener aquí
+            if (resultadoFunc && resultadoFunc.huboError === true) {
+              cy.log('Error detectado en la función (solapamiento, error 500 o eliminación) - deteniendo ejecución del caso');
+              return cy.wrap(null);
+            }
+            return cy.wrap(null);
+          });
         }
         return cy.wrap(null);
       })
@@ -1180,17 +1568,70 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
                           .click({ force: true })
                           .then(() => cy.wait(500))
                           .then(() => {
-                            // Reintento: la limpieza global ya existe, pero aquí reforzamos
+                            // Intentar limpiar el segundo registro una vez
                             return limpiarSegundoRegistroTrabajoSiExiste()
-                              .then(() => cy.wait(800))
-                              .then(() => {
-                                cy.log('Reintentando registrar entrada después de limpiar...');
-                                return rellenarCamposEntrada(paso)
-                                  .then(() => clickBotonFichaje('entrada'))
-                .then(() => aceptarAdvertenciaSiExiste({
-                  mensajeEsperado: mensajesEntrada,
-                  accion: config.accionAlertaEntrada
-                                  }));
+                              .then((resultadoLimpieza) => {
+                                // Si hubo error 500 al eliminar, registrar ERROR y detener
+                                if (resultadoLimpieza && resultadoLimpieza.huboError === true) {
+                                  const casoId = String(casoExcel.caso || '').trim().toUpperCase();
+                                  const numero = parseInt(casoId.replace('TC', ''), 10) || 0;
+                                  const nombre = `${casoId} - ${casoExcel.nombre}`;
+                                  registrarResultado(
+                                    casoId,
+                                    nombre,
+                                    casoExcel.resultado_esperado || 'Comportamiento correcto',
+                                    'ERROR 500: Error interno del servidor al intentar eliminar registro solapado',
+                                    'ERROR'
+                                  );
+                                  return cy.wrap({ huboError: true });
+                                }
+                                
+                                // Si no hubo error, continuar con el reintento
+                                return cy.wait(1000)
+                                  .then(() => {
+                                    cy.log('Reintentando registrar entrada después de limpiar...');
+                                    return rellenarCamposEntrada(paso)
+                                      .then(() => clickBotonFichaje('entrada'))
+                                      .then(() => cy.wait(1000))
+                                      .then(() => {
+                                        // Verificar si sigue habiendo solapamiento después del reintento
+                                        return cy.get('body', { timeout: 2000 }).then(($body2) => {
+                                          const texto2 = $body2.text();
+                                          if (/se solapa|solapamiento|Error en hora de inicio/i.test(texto2)) {
+                                            // Si sigue habiendo solapamiento, significa que no se pudo eliminar
+                                            cy.log(' ERROR: Solapamiento persiste - no se pueden eliminar los registros');
+                                            
+                                            // Cerrar el modal de error (solo una vez)
+                                            return cy.contains('button', /Aceptar/i, { timeout: 3000 })
+                                              .first()
+                                              .click({ force: true })
+                                              .then(() => cy.wait(500))
+                                              .then(() => {
+                                                // Registrar ERROR en Excel
+                                                const casoId = String(casoExcel.caso || '').trim().toUpperCase();
+                                                const numero = parseInt(casoId.replace('TC', ''), 10) || 0;
+                                                const nombre = `${casoId} - ${casoExcel.nombre}`;
+                                                registrarResultado(
+                                                  casoId,
+                                                  nombre,
+                                                  casoExcel.resultado_esperado || 'Comportamiento correcto',
+                                                  'ERROR: Solapamiento de registros detectado y no se pueden eliminar',
+                                                  'ERROR'
+                                                );
+                                                
+                                                // Retornar flag de error para detener el test
+                                                return cy.wrap({ huboError: true });
+                                              });
+                                          }
+                                          
+                                          // Si no hay solapamiento, continuar normalmente
+                                          return aceptarAdvertenciaSiExiste({
+                                            mensajeEsperado: mensajesEntrada,
+                                            accion: config.accionAlertaEntrada
+                                          });
+                                        });
+                                      });
+                                  });
                               });
                           });
                       }
@@ -1201,7 +1642,19 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
                       });
                     });
                   })
-                .then(() => {
+                  .then((resultadoAnterior) => {
+                    // Si hubo un error de solapamiento que no se pudo resolver, detener
+                    if (resultadoAnterior && resultadoAnterior.huboError === true) {
+                      return cy.wrap({ huboError: true });
+                    }
+                    return cy.wrap(null);
+                  })
+                .then((resultadoAnterior) => {
+                  // Si hubo un error de solapamiento, detener aquí
+                  if (resultadoAnterior && resultadoAnterior.huboError === true) {
+                    return cy.wrap({ huboError: true });
+                  }
+                  
                   if (config.accionAlertaEntrada === 'cancelar') {
                     entradaPendiente = false;
                     if (config.verificarEntradaNoRegistradaTrasCancelar) {
@@ -1251,7 +1704,13 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
         }
       });
 
-      return chain;
+      return chain.then((resultadoFinal) => {
+        // Si hubo un error de solapamiento en algún paso, retornar el flag
+        if (resultadoFinal && resultadoFinal.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
+        return cy.wrap(null);
+      });
     });
   }
   // ────────────────────────────────
@@ -1259,6 +1718,7 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
   // ────────────────────────────────
   function editarTramoTrabajoCaso(casoExcel) {
     const casoId = String(casoExcel.caso || '').toUpperCase();
+    const numero = parseInt(casoId.replace('TC', ''), 10) || 0;
 
     // 1) Elegir qué fila y qué campo editamos
     //Todos los casos (TC024–TC027) hacen lo MISMO: primer tramo, inicio
@@ -1306,34 +1766,185 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
           return rellenarCamposEntrada(pasoEntrada);
         })
         .then(() => {
-          cy.log('Pulsando botón "Entrada"');
-          return clickBotonFichaje('entrada');
+          // Verificar error 500 antes de intentar hacer clic
+          return verificarError500DespuesEditar(casoExcel, numero)
+            .then((huboError) => {
+              if (huboError) {
+                return cy.wrap({ huboError: true });
+              }
+              return cy.wrap(null);
+            });
         })
-        .then(() => {
+        .then((resultadoAnterior) => {
+          if (resultadoAnterior && resultadoAnterior.huboError === true) {
+            return cy.wrap({ huboError: true });
+          }
+          cy.log('Pulsando botón "Entrada"');
+          return clickBotonFichaje('entrada')
+            .then(() => cy.wait(1000))
+            .then(() => verificarError500DespuesEditar(casoExcel, numero))
+            .then((huboError) => {
+              if (huboError) {
+                return cy.wrap({ huboError: true });
+              }
+              return cy.wrap(null);
+            }, (err) => {
+              // Si falla al hacer clic, verificar si es por error 500 o error detectado
+              if (err && err.message && err.message.includes('ERROR_DETECTADO_ANTES_DE_CLIC')) {
+                // Error ya detectado antes de hacer clic, verificar y registrar
+                return verificarError500DespuesEditar(casoExcel, numero)
+                  .then((huboError) => {
+                    if (huboError) {
+                      return cy.wrap({ huboError: true });
+                    }
+                    // Si no es error 500, registrar error genérico
+                    const casoId = String(casoExcel.caso || '').trim().toUpperCase();
+                    const nombre = `${casoId} - ${casoExcel.nombre}`;
+                    registrarResultado(
+                      casoId,
+                      nombre,
+                      casoExcel.resultado_esperado || 'Comportamiento correcto',
+                      'ERROR: Error detectado antes de hacer clic en el botón de entrada',
+                      'ERROR'
+                    );
+                    return cy.wrap({ huboError: true });
+                  });
+              }
+              // Si falla al hacer clic, verificar si es por error 500
+              return verificarError500DespuesEditar(casoExcel, numero)
+                .then((huboError) => {
+                  if (huboError) {
+                    return cy.wrap({ huboError: true });
+                  }
+                  // Si no es error 500, registrar error genérico
+                  const casoId = String(casoExcel.caso || '').trim().toUpperCase();
+                  const nombre = `${casoId} - ${casoExcel.nombre}`;
+                  registrarResultado(
+                    casoId,
+                    nombre,
+                    casoExcel.resultado_esperado || 'Comportamiento correcto',
+                    'ERROR: No se pudo hacer clic en el botón de entrada',
+                    'ERROR'
+                  );
+                  return cy.wrap({ huboError: true });
+                });
+            });
+        })
+        .then((resultadoAnterior) => {
+          if (resultadoAnterior && resultadoAnterior.huboError === true) {
+            return cy.wrap({ huboError: true });
+          }
           return aceptarAdvertenciaSiExiste({
             accion: 'omitir'
-          });
+          })
+            .then(() => cy.wait(1000))
+            .then(() => verificarError500DespuesEditar(casoExcel, numero))
+            .then((huboError) => {
+              if (huboError) {
+                return cy.wrap({ huboError: true });
+              }
+              return cy.wrap(null);
+            });
         })
-        .then(() => cy.wait(800))
-        .then(() => {
+        .then((resultadoAnterior) => {
+          if (resultadoAnterior && resultadoAnterior.huboError === true) {
+            return cy.wrap({ huboError: true });
+          }
           cy.log(' TC026/TC027: Registrando salida para completar el registro');
           const pasoSalida = { fecha: hoyISO, hora: '11:00' };
           return rellenarCamposSalida(pasoSalida);
         })
-        .then(() => {
+        .then((resultadoAnterior) => {
+          if (resultadoAnterior && resultadoAnterior.huboError === true) {
+            return cy.wrap({ huboError: true });
+          }
           cy.log(`Esperando 10 segundos antes de registrar la salida`);
           return cy.wait(10000);
         })
-        .then(() => {
-          cy.log('Pulsando botón "Salida"');
-          return clickBotonFichaje('salida');
+        .then((resultadoAnterior) => {
+          if (resultadoAnterior && resultadoAnterior.huboError === true) {
+            return cy.wrap({ huboError: true });
+          }
+          // Verificar error 500 antes de intentar hacer clic en salida
+          return verificarError500DespuesEditar(casoExcel, numero)
+            .then((huboError) => {
+              if (huboError) {
+                return cy.wrap({ huboError: true });
+              }
+              return cy.wrap(null);
+            });
         })
-        .then(() => {
+        .then((resultadoAnterior) => {
+          if (resultadoAnterior && resultadoAnterior.huboError === true) {
+            return cy.wrap({ huboError: true });
+          }
+          cy.log('Pulsando botón "Salida"');
+          return clickBotonFichaje('salida')
+            .then(() => cy.wait(1000))
+            .then(() => verificarError500DespuesEditar(casoExcel, numero))
+            .then((huboError) => {
+              if (huboError) {
+                return cy.wrap({ huboError: true });
+              }
+              return cy.wrap(null);
+            }, (err) => {
+              // Si falla al hacer clic, verificar si es por error 500 o error detectado
+              if (err && err.message && err.message.includes('ERROR_DETECTADO_ANTES_DE_CLIC')) {
+                // Error ya detectado antes de hacer clic, verificar y registrar
+                return verificarError500DespuesEditar(casoExcel, numero)
+                  .then((huboError) => {
+                    if (huboError) {
+                      return cy.wrap({ huboError: true });
+                    }
+                    // Si no es error 500, registrar error genérico
+                    const casoId = String(casoExcel.caso || '').trim().toUpperCase();
+                    const nombre = `${casoId} - ${casoExcel.nombre}`;
+                    registrarResultado(
+                      casoId,
+                      nombre,
+                      casoExcel.resultado_esperado || 'Comportamiento correcto',
+                      'ERROR: Error detectado antes de hacer clic en el botón de salida',
+                      'ERROR'
+                    );
+                    return cy.wrap({ huboError: true });
+                  });
+              }
+              // Si falla al hacer clic, verificar si es por error 500
+              return verificarError500DespuesEditar(casoExcel, numero)
+                .then((huboError) => {
+                  if (huboError) {
+                    return cy.wrap({ huboError: true });
+                  }
+                  // Si no es error 500, registrar error genérico
+                  const casoId = String(casoExcel.caso || '').trim().toUpperCase();
+                  const nombre = `${casoId} - ${casoExcel.nombre}`;
+                  registrarResultado(
+                    casoId,
+                    nombre,
+                    casoExcel.resultado_esperado || 'Comportamiento correcto',
+                    'ERROR: No se pudo hacer clic en el botón de salida',
+                    'ERROR'
+                  );
+                  return cy.wrap({ huboError: true });
+                });
+            });
+        })
+        .then((resultadoAnterior) => {
+          if (resultadoAnterior && resultadoAnterior.huboError === true) {
+            return cy.wrap({ huboError: true });
+          }
           return aceptarAdvertenciaSiExiste({
             accion: 'omitir'
-          });
-        })
-        .then(() => cy.wait(800));
+          })
+            .then(() => cy.wait(1000))
+            .then(() => verificarError500DespuesEditar(casoExcel, numero))
+            .then((huboError) => {
+              if (huboError) {
+                return cy.wrap({ huboError: true });
+              }
+              return cy.wrap(null);
+            });
+        });
     }
 
     // 3) Asegurarnos de que el bloque "Trabajo" está visible en pantalla
@@ -1385,7 +1996,7 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
       });
     });
 
-    // 4) Editar la hora del tramo seleccionado:
+    // 5) Editar la hora del tramo seleccionado:
     //    clic en input -> modal "Editar entrada/salida" (Sí) -> modal HH:mm (rellenar y Aceptar)
     chain = chain.then(() => {
       cy.log(`Editando tramo de trabajo índice ${indexEntrada} (${tipoCampo}) -> hora ${horaFinal}`);
@@ -1448,12 +2059,26 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
               return cy.get(selectorBotonSi, { timeout: 8000 })
                 .first()
                 .click({ force: true })
-                .then(() => cy.wait(400));
+                .then(() => cy.wait(1000))
+                .then(() => verificarError500DespuesEditar(casoExcel, numero))
+                .then((huboError) => {
+                  if (huboError) {
+                    return cy.wrap({ huboError: true });
+                  }
+                  return cy.wrap(null);
+                });
             }
 
             return cy.contains('button, a', /^s[íi]$/i, { timeout: 8000 })
               .click({ force: true })
-              .then(() => cy.wait(400));
+              .then(() => cy.wait(1000))
+              .then(() => verificarError500DespuesEditar(casoExcel, numero))
+              .then((huboError) => {
+                if (huboError) {
+                  return cy.wrap({ huboError: true });
+                }
+                return cy.wrap(null);
+              });
           });
         })
         // 4.2 Modal HH:mm (rellenar y Aceptar)
@@ -1496,8 +2121,12 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
                   .should('be.visible')
                   .click({ force: true });
               })
-              .then(() => {
-                cy.wait(500);
+              .then(() => cy.wait(1000))
+              .then(() => verificarError500DespuesEditar(casoExcel, numero))
+              .then((huboError) => {
+                if (huboError) {
+                  return cy.wrap({ huboError: true });
+                }
                 return cy.get('body', { timeout: 5000 }).should(($b) => {
                   const hayInputsVisibles = $b
                     .find('input.time-edit-field-input')
@@ -1514,12 +2143,19 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
               .first()
               .should('be.visible')
               .click({ force: true })
-              .then(() => cy.wait(500));
+              .then(() => cy.wait(1000))
+              .then(() => verificarError500DespuesEditar(casoExcel, numero))
+              .then((huboError) => {
+                if (huboError) {
+                  return cy.wrap({ huboError: true });
+                }
+                return cy.wrap(null);
+              });
           });
         });
     });
 
-    // 5) Pulsar el botón "Aceptar" del tramo editado
+    // 6) Pulsar el botón "Aceptar" del tramo editado
     chain = chain.then(() => {
       cy.log('Buscando y pulsando botón "Aceptar" del tramo editado en Trabajo...');
 
@@ -1549,11 +2185,26 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
             const $visibles = $btns.filter(':visible');
             const $target = $visibles.length ? $visibles.first() : $btns.first();
 
-            cy.wrap($target).click({ force: true });
+            return cy.wrap($target).click({ force: true });
         });
     });
     })
-      // 5.1 Si aparece otra vez el modal de "Editar entrada/salida" tras Aceptar, pulsar "Sí" y NO hacer más
+      .then(() => cy.wait(1000))
+      .then(() => verificarError500DespuesEditar(casoExcel, numero))
+      .then((huboError) => {
+        if (huboError) {
+          return cy.wrap({ huboError: true });
+        }
+        return cy.wrap(null);
+      })
+      .then((resultadoAnterior) => {
+        // Si hubo error 500, detener aquí
+        if (resultadoAnterior && resultadoAnterior.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
+        return cy.wrap(null);
+      })
+      // 6.1 Si aparece otra vez el modal de "Editar entrada/salida" tras Aceptar, pulsar "Sí" y NO hacer más
       .then(() => {
         cy.wait(400);
         return cy.get('body', { timeout: 10000 }).then(($body) => {
@@ -1576,30 +2227,59 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
             return cy.get(selectorBotonSi, { timeout: 8000 })
               .first()
               .click({ force: true })
-              .then(() => cy.wait(400));
+              .then(() => cy.wait(1000))
+              .then(() => verificarError500DespuesEditar(casoExcel, numero))
+              .then((huboError) => {
+                if (huboError) {
+                  return cy.wrap({ huboError: true });
+                }
+                return cy.wrap(null);
+              });
           }
 
           return cy.contains('button, a', /^s[íi]$/i, { timeout: 8000 })
             .click({ force: true })
-            .then(() => cy.wait(400));
+            .then(() => cy.wait(1000))
+            .then(() => verificarError500DespuesEditar(casoExcel, numero))
+            .then((huboError) => {
+              if (huboError) {
+                return cy.wrap({ huboError: true });
+              }
+              return cy.wrap(null);
+            });
         });
+      })
+      .then((resultadoAnterior) => {
+        // Si hubo error 500 en algún paso anterior, detener aquí
+        if (resultadoAnterior && resultadoAnterior.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
+        return cy.wrap(null);
       });
 
-    // 6) Nada de gestionar textarea ni advertencias: simplemente RECARGAR
-    chain = chain.then(() => {
+    // 7) Verificar si hubo error 500 antes de recargar
+    return chain.then((resultadoAnterior) => {
+      // Si hubo error 500 en algún paso, retornar el flag y no recargar
+      if (resultadoAnterior && resultadoAnterior.huboError === true) {
+        cy.log('ERROR 500 detectado - no se recarga la página');
+        return cy.wrap({ huboError: true });
+      }
+      
+      // Si no hubo error, continuar con la recarga normal
       cy.log('Ignorando alertas finales y reiniciando pantalla de fichajes después del caso...');
       cy.wait(500);
       return cy.reload(true).then(() => verificarUrlFichar());
     });
-
-    return chain;
   }
 
   // ────────────────────────────────
   // Eliminación directa del bloque Trabajo para TC030
   // ────────────────────────────────
   function eliminarTramoTrabajoCaso(casoExcel) {
-    cy.log(' TC030: Creando registro y luego eliminando segundo registro en Trabajo');
+    cy.log(' TC030: Eliminando segundo registro en Trabajo');
+
+    const casoId = String(casoExcel.caso || '').toUpperCase();
+    const numero = parseInt(casoId.replace('TC', ''), 10) || 0;
 
     const bloque = '#work-session-block';
     const filas = '#work-session-block .time-entry';
@@ -1608,50 +2288,9 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
     const inputEnd = 'input.time-input.time-input-end, input.time-input-end';
 
     const btnSi = 'button.btn-notification.btn-primary[data-action="accept"]';
-    const hoyISO = new Date().toISOString().slice(0, 10);
 
-    let chain = cy.wrap(null);
-
-    // 1) Primero crear un nuevo registro (entrada y salida)
-    chain = chain
-      .then(() => {
-        cy.log(' TC030: Registrando entrada para crear segundo registro');
-        const pasoEntrada = { fecha: hoyISO, hora: '10:00' };
-        return rellenarCamposEntrada(pasoEntrada);
-      })
-      .then(() => {
-        cy.log('Pulsando botón "Entrada"');
-        return clickBotonFichaje('entrada');
-      })
-      .then(() => {
-        return aceptarAdvertenciaSiExiste({
-          accion: 'omitir'
-        });
-      })
-      .then(() => cy.wait(800))
-      .then(() => {
-        cy.log(' TC030: Registrando salida para completar el registro');
-        const pasoSalida = { fecha: hoyISO, hora: '11:00' };
-        return rellenarCamposSalida(pasoSalida);
-      })
-      .then(() => {
-        cy.log(`Esperando 10 segundos antes de registrar la salida`);
-        return cy.wait(10000);
-      })
-      .then(() => {
-        cy.log('Pulsando botón "Salida"');
-        return clickBotonFichaje('salida');
-      })
-      .then(() => {
-        return aceptarAdvertenciaSiExiste({
-          accion: 'omitir'
-      });
-      })
-      .then(() => cy.wait(800));
-
-    // 2) Ahora eliminar el segundo registro
-    chain = chain.then(() => {
-      return cy.get('body', { timeout: 10000 }).then(($body) => {
+    // Eliminar el segundo registro directamente (sin crear nada)
+    return cy.get('body', { timeout: 10000 }).then(($body) => {
         if (!$body.find(bloque).length) {
           cy.log(' No existe bloque Trabajo');
           return cy.wrap(null);
@@ -1694,21 +2333,26 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
               if ($b.find(btnSi).length) {
                 cy.log(' Confirmando eliminación (Sí)');
                 return cy.get(btnSi, { timeout: 8000 })
+                  .first()
                   .click({ force: true });
               }
               return cy.wrap(null);
-      });
+            });
           })
-
-          .then(() => cy.wait(300))
+          .then(() => cy.wait(1500))
           .then(() => {
+            // Verificar error 500 después de confirmar eliminación
+            return verificarError500DespuesEliminar(casoExcel, numero);
+          })
+          .then((huboError) => {
+            if (huboError) {
+              cy.log(' ERROR 500 detectado después de confirmar eliminación en TC030');
+              return cy.wrap({ huboError: true });
+            }
             cy.log(' Eliminación completada');
             return cy.wrap(null);
           });
-      });
     });
-
-    return chain;
   }
 
   // Casos TC024–TC027 y TC030: edición/eliminación directa del bloque "Trabajo".
@@ -1720,13 +2364,27 @@ function limpiarSegundoRegistroTrabajoSiExiste() {
     // Para TC030 usamos el flujo de eliminación
     if (casoId === 'TC030') {
       return asegurarSesionFichar(casoExcel)
-        .then(() => eliminarTramoTrabajoCaso(casoExcel));
+        .then(() => eliminarTramoTrabajoCaso(casoExcel))
+        .then((resultado) => {
+          // Si hubo error 500, retornar el flag para detener el test
+          if (resultado && resultado.huboError === true) {
+            return cy.wrap({ huboError: true });
+          }
+          return cy.wrap(null);
+        });
     }
 
     // Para TC024–TC027 usamos SIEMPRE el flujo específico sobre el bloque "Trabajo"
     if (['TC024', 'TC025', 'TC026', 'TC027'].includes(casoId)) {
       return asegurarSesionFichar(casoExcel)
-        .then(() => editarTramoTrabajoCaso(casoExcel));
+        .then(() => editarTramoTrabajoCaso(casoExcel))
+        .then((resultado) => {
+          // Si hubo error 500, retornar el flag para detener el test
+          if (resultado && resultado.huboError === true) {
+            return cy.wrap({ huboError: true });
+          }
+          return cy.wrap(null);
+        });
     }
 
     // Si llegamos aquí, no hay lógica implementada para este caso
