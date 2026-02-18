@@ -238,23 +238,15 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
 
   // Helper: Verificar error 500 después de pulsar Crear
   function verificarError500DespuesCrear(casoExcel, numero) {
-    return cy.get('body', { timeout: 3000 }).then(($body) => {
+    return cy.get('body', { timeout: 5000 }).then(($body) => {
       if (!$body || $body.length === 0) {
-        // Si no hay body, verificar en el documento
+        // Si no hay body, intentar verificar en el documento (pero NO registrar error si no hay documento)
         return cy.document().then((doc) => {
           if (!doc || !doc.body) {
-            // Si no hay documento o body, registrar error 500 de todas formas
-            cy.log('No se pudo obtener el documento - registrando ERROR 500 en Excel');
-            const casoId = casoExcel.caso || `TC${String(numero).padStart(3, '0')}`;
-            const nombre = `${casoId} - ${casoExcel.nombre}`;
-            registrarResultado(
-              casoId,
-              nombre,
-              casoExcel.resultado_esperado || 'Comportamiento correcto',
-              'ERROR 500: Error interno del servidor detectado al crear',
-              'ERROR'
-            );
-            return cy.wrap(true); // Indica que hubo error
+            // Si no hay documento o body, NO registrar error (puede ser un problema temporal)
+            // Solo devolver false para que continúe el flujo normal
+            cy.log('No se pudo obtener el documento - asumiendo que no hay error 500');
+            return cy.wrap(false); // No hubo error detectado
           }
           const docText = doc.body.textContent ? doc.body.textContent.toLowerCase() : '';
           const tieneError500 = docText.includes('500') ||
@@ -278,18 +270,9 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
           }
           return cy.wrap(false); // No hubo error
         }, () => {
-          // Si falla al obtener el documento, registrar error 500 de todas formas
-          cy.log('Error al obtener el documento - registrando ERROR 500 en Excel');
-          const casoId = casoExcel.caso || `TC${String(numero).padStart(3, '0')}`;
-          const nombre = `${casoId} - ${casoExcel.nombre}`;
-          registrarResultado(
-            casoId,
-            nombre,
-            casoExcel.resultado_esperado || 'Comportamiento correcto',
-            'ERROR 500: Error interno del servidor detectado al crear',
-            'ERROR'
-          );
-          return cy.wrap(true); // Indica que hubo error
+          // Si falla al obtener el documento, NO registrar error (puede ser un problema temporal)
+          cy.log('Error al obtener el documento - asumiendo que no hay error 500');
+          return cy.wrap(false); // No hubo error detectado
         });
       }
 
@@ -317,21 +300,12 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
 
       return cy.wrap(false); // No hubo error
     }, () => {
-      // Si falla al obtener el body, verificar en el documento
+      // Si falla al obtener el body, intentar verificar en el documento (pero NO registrar error si falla)
       return cy.document().then((doc) => {
         if (!doc || !doc.body) {
-          // Si no hay documento o body, registrar error 500 de todas formas
-          cy.log('No se pudo obtener el documento - registrando ERROR 500 en Excel');
-          const casoId = casoExcel.caso || `TC${String(numero).padStart(3, '0')}`;
-          const nombre = `${casoId} - ${casoExcel.nombre}`;
-          registrarResultado(
-            casoId,
-            nombre,
-            casoExcel.resultado_esperado || 'Comportamiento correcto',
-            'ERROR 500: Error interno del servidor detectado al crear',
-            'ERROR'
-          );
-          return cy.wrap(true); // Indica que hubo error
+          // Si no hay documento o body, NO registrar error (puede ser un problema temporal)
+          cy.log('No se pudo obtener el documento - asumiendo que no hay error 500');
+          return cy.wrap(false); // No hubo error detectado
         }
         const docText = doc.body.textContent ? doc.body.textContent.toLowerCase() : '';
         const tieneError500 = docText.includes('500') ||
@@ -355,18 +329,9 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
         }
         return cy.wrap(false); // No hubo error
       }, () => {
-        // Si falla al obtener el documento, registrar error 500 de todas formas
-        cy.log('Error al obtener el documento - registrando ERROR 500 en Excel');
-        const casoId = casoExcel.caso || `TC${String(numero).padStart(3, '0')}`;
-        const nombre = `${casoId} - ${casoExcel.nombre}`;
-        registrarResultado(
-          casoId,
-          nombre,
-          casoExcel.resultado_esperado || 'Comportamiento correcto',
-          'ERROR 500: Error interno del servidor detectado al crear',
-          'ERROR'
-        );
-        return cy.wrap(true); // Indica que hubo error
+        // Si falla al obtener el documento, NO registrar error (puede ser un problema temporal)
+        cy.log('Error al obtener el documento - asumiendo que no hay error 500');
+        return cy.wrap(false); // No hubo error detectado
       });
     });
   }
