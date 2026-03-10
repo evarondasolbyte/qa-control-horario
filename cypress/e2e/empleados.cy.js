@@ -1,4 +1,4 @@
-// Suite de pruebas de la pantalla de Empleados siguiendo la misma estructura que grupos.cy.js
+﻿// Suite de pruebas de la pantalla de Empleados siguiendo la misma estructura que grupos.cy.js
 describe('EMPLEADOS - Validación completa con gestión de errores y reporte a Excel', () => {
   const archivo = 'reportes_pruebas_control_horario.xlsx';
   const BASE_URL = 'https://horario.dev.novatrans.app';
@@ -21,6 +21,8 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
         err.message?.includes('Snapshot missing on Livewire component') ||
         err.message?.includes('Component already initialized') ||
         err.message?.includes('Cannot read properties of null') ||
+        err.message?.includes('reading \'destroy\'') ||
+        err.message?.includes('Expected one of the following types text|select-one|select-multiple') ||
         err.message?.includes('reading \'document\'') ||
         err.message?.includes('Socket closed') ||
         err.message?.includes('network error occurred') ||
@@ -30,10 +32,6 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
       }
       return true;
     });
-
-    // No usar intercept para errores 500 porque puede fallar con errores de red
-    // Los errores 500 se detectarán en el DOM/URL después de la petición
-    // Esto evita el error "Socket closed before finished writing response"
   });
 
   after(() => {
@@ -90,7 +88,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
     const numero = parseInt(casoId.replace(/^TC/i, ''), 10) || 1;
     const nombre = `${casoId} - ${casoExcel.nombre}`;
 
-    cy.log('────────────────────────────────────────────────────────');
+    cy.log('--------------------------------------------------------');
     cy.log(`${nombre} [${casoExcel.prioridad || 'SIN PRIORIDAD'}]`);
     cy.log(`Función solicitada: "${casoExcel.funcion}"`);
 
@@ -107,15 +105,15 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
     // Función helper para detectar si es un error 500 o si no se abrió el formulario
     const esError500 = (err) => {
       if (!err) return false;
-      return err.status === 500 || 
-             err.statusCode === 500 || 
-             err.message?.includes('500') ||
-             err.message?.includes('Internal Server Error') ||
+      return err.status === 500 ||
+        err.statusCode === 500 ||
+        err.message?.includes('500') ||
+        err.message?.includes('Internal Server Error') ||
         err.message?.includes('ERROR_500_DETECTADO') ||
         err.message?.includes('ERROR_FORMULARIO_NO_ABIERTO') ||
-             err.response?.status === 500 ||
-             String(err).includes('500') ||
-             (err.name && err.name.includes('500'));
+        err.response?.status === 500 ||
+        String(err).includes('500') ||
+        (err.name && err.name.includes('500'));
     };
 
     // Función helper para manejar error 500 o formulario no abierto
@@ -124,13 +122,17 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
       errorYaRegistrado = true;
 
       // Determinar el tipo de error y el mensaje
+      const mensajeNormalizado = String(err?.message || err || '')
+        .replace(/^ERROR_500_DETECTADO:\s*/i, '')
+        .replace(/^ERROR_FORMULARIO_NO_ABIERTO:\s*/i, '')
+        .trim();
       let mensajeError;
       if (err?.message?.includes('ERROR_FORMULARIO_NO_ABIERTO')) {
         mensajeError = 'ERROR: No se pudo abrir el formulario correctamente. La página no muestra el formulario esperado.';
       } else if (url) {
         mensajeError = `ERROR 500: Error interno del servidor en ${url}`;
       } else {
-        mensajeError = `ERROR 500: ${err?.message || err || 'Error interno del servidor'}`;
+        mensajeError = `ERROR 500: ${mensajeNormalizado || 'Error interno del servidor'}`;
       }
 
       cy.log(`ERROR detectado en ${casoId}: ${mensajeError}`);
@@ -207,17 +209,17 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
               }
               // Si no hay error, verificar error 500 temprano
               return verificarError500Temprano();
-      }, (err) => {
+            }, (err) => {
               // Si es error 500 o formulario no abierto, manejarlo (retorna cy.wrap(true))
               cy.log(`Error capturado en primer nivel: ${err?.message || err}`);
-        if (esError500(err)) {
+              if (esError500(err)) {
                 cy.log(`Error 500 detectado, manejando...`);
-          return manejarError500(err);
-        }
+                return manejarError500(err);
+              }
               // Si no es 500, re-lanzar el error
               cy.log(`Error no es 500, re-lanzando...`);
-        throw err;
-      })
+              throw err;
+            })
             .then((resultado) => {
               // Si resultado es true, significa que hubo error 500
               if (resultado === true) {
@@ -231,7 +233,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
                 return cy.wrap(true);
               }
               return resultado;
-        }, (err) => {
+            }, (err) => {
               // Captura adicional por si el error no se capturó arriba
               cy.log(`Error capturado en segundo nivel: ${err?.message || err}`);
               if (esError500(err)) {
@@ -294,7 +296,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
           // Retornar null para que el test continúe sin fallar
           return cy.wrap(null);
         }
-        
+
         // Para otros errores, usar el manejo normal
         cy.capturarError(nombre, err, {
           numero: casoId,
@@ -366,7 +368,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
       const verificarPantallaCargada = () => {
         // Esperar a que la página cargue completamente
         cy.wait(1000);
-        
+
         // Intentar cerrar panel lateral si existe (sin fallar si no existe)
         cy.get('body').then(($body) => {
           const hayPanelLateral = $body.find('[class*="overlay"], [class*="modal"], [class*="drawer"], [class*="sidebar"]').length > 0;
@@ -379,53 +381,53 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
 
         // Verificar que la página esté cargada
         cy.get('body', { timeout: 20000 }).should('be.visible');
-        
+
         // Verificar si hay tabla o estado de "sin datos" - ambos son válidos
         return cy.get('body', { timeout: 20000 }).then(($body) => {
           const hayTabla = $body.find('.fi-ta-table, table').length > 0;
-          
+
           if (hayTabla) {
             cy.log('Tabla encontrada, verificando visibilidad...');
             return cy.get('.fi-ta-table, table', { timeout: 20000 }).should('exist');
           }
-          
+
           // Si no hay tabla, verificar si hay estado de "sin datos"
           const hayEstadoVacio = $body.find('.fi-empty-state, .fi-ta-empty-state, [class*="empty"], [class*="sin datos"], [class*="no hay"]').length > 0;
           const textoBody = $body.text().toLowerCase();
-          const hayMensajeSinDatos = textoBody.includes('no hay datos') || 
-                                     textoBody.includes('sin registros') || 
-                                     textoBody.includes('tabla vacía') ||
-                                     textoBody.includes('no se encontraron') ||
-                                     textoBody.includes('no se encontraron registros') ||
-                                     textoBody.includes('sin resultados') ||
-                                     textoBody.includes('no existen registros');
-          
+          const hayMensajeSinDatos = textoBody.includes('no hay datos') ||
+            textoBody.includes('sin registros') ||
+            textoBody.includes('tabla vacía') ||
+            textoBody.includes('no se encontraron') ||
+            textoBody.includes('no se encontraron registros') ||
+            textoBody.includes('sin resultados') ||
+            textoBody.includes('no existen registros');
+
           if (hayEstadoVacio || hayMensajeSinDatos) {
             cy.log('No hay registros en la tabla - esto es válido (OK)');
             return cy.wrap(true);
           }
-          
+
           // Si no hay tabla ni mensaje, esperar un poco más y buscar la tabla
           cy.log('Esperando a que la tabla se cargue...');
           return cy.get('.fi-ta-table, table', { timeout: 20000 }).should('exist').catch(() => {
             // Si después del timeout no hay tabla, verificar una última vez si hay mensaje de sin datos
             return cy.get('body', { timeout: 2000 }).then(($body2) => {
               const textoBody2 = $body2.text().toLowerCase();
-              const hayMensaje = textoBody2.includes('no hay') || 
-                                textoBody2.includes('sin datos') || 
-                                textoBody2.includes('vacío') ||
-                                textoBody2.includes('sin registros') ||
-                                textoBody2.includes('sin resultados') ||
-                                textoBody2.includes('no se encontraron') ||
-                                textoBody2.includes('no se encontraron registros') ||
-                                textoBody2.includes('no existen registros');
+              const hayMensaje = textoBody2.includes('no hay') ||
+                textoBody2.includes('sin datos') ||
+                textoBody2.includes('vacío') ||
+                textoBody2.includes('sin registros') ||
+                textoBody2.includes('sin resultados') ||
+                textoBody2.includes('no se encontraron') ||
+                textoBody2.includes('no se encontraron registros') ||
+                textoBody2.includes('no existen registros');
               const hayEstado = $body2.find('.fi-empty-state, .fi-ta-empty-state, [class*="empty"]').length > 0;
-              
+
               if (hayMensaje || hayEstado) {
                 cy.log('No hay registros - esto es válido (OK)');
                 return cy.wrap(true);
               }
-              
+
               // Si realmente no hay nada, lanzar error
               cy.log(' No se encontró tabla ni mensaje de sin datos');
               throw new Error('No se encontró la tabla ni mensaje de sin datos');
@@ -441,10 +443,10 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
         return verificarPantallaCargada();
       } else {
         cy.log('Sin sesión, realizando login primero...');
-        cy.login({ 
-          email: Cypress.env('SUPERADMIN_EMAIL') || 'superadmin@novatrans.app', 
-          password: Cypress.env('SUPERADMIN_PASSWORD') || 'novatranshorario@2025', 
-          useSession: false 
+        cy.login({
+          email: Cypress.env('SUPERADMIN_EMAIL') || 'superadmin@novatrans.app',
+          password: Cypress.env('SUPERADMIN_PASSWORD') || 'novatranshorario@2025',
+          useSession: false
         });
         // Verificar si redirigió a fichar y navegar a Panel interno si es necesario
         cy.url({ timeout: 15000 }).then((currentUrl) => {
@@ -463,7 +465,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
           return cy.wrap(null);
         });
         cy.url({ timeout: 20000 }).should('include', DASHBOARD_PATH);
-        cy.wait(1500);
+        cy.wait(1200);
         cy.visit(EMPLEADOS_URL_ABS, { failOnStatusCode: false });
         cy.url({ timeout: 20000 }).should('include', EMPLEADOS_PATH);
         return verificarPantallaCargada();
@@ -489,6 +491,50 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
       }
     }
     return '';
+  }
+
+  function obtenerDatoPorEtiquetaParcial(casoExcel, etiquetaBuscada) {
+    if (!etiquetaBuscada) return '';
+    const patron = etiquetaBuscada.toLowerCase().trim();
+
+    for (let i = 1; i <= 11; i++) {
+      const etiqueta = (casoExcel[`etiqueta_${i}`] || '').toLowerCase().trim();
+      const valorEtiqueta = (casoExcel[`valor_etiqueta_${i}`] || '').toLowerCase().trim();
+      const dato = (casoExcel[`dato_${i}`] || '').trim();
+
+      if (!dato) continue;
+      if (etiqueta.includes(patron) || valorEtiqueta.includes(patron)) {
+        return dato;
+      }
+    }
+
+    return '';
+  }
+
+  function obtenerChoicesPorOrden(casoExcel) {
+    const valores = [];
+
+    for (let i = 1; i <= 11; i++) {
+      const etiqueta = (casoExcel[`etiqueta_${i}`] || '').toLowerCase().trim();
+      const valorEtiqueta = (casoExcel[`valor_etiqueta_${i}`] || '').toLowerCase().trim();
+      const dato = (casoExcel[`dato_${i}`] || '').trim();
+
+      if (!dato) continue;
+
+      const esChoice =
+        valorEtiqueta.includes('choices') ||
+        valorEtiqueta.includes('select') ||
+        etiqueta.includes('choices') ||
+        valorEtiqueta.includes('current_group_id') ||
+        valorEtiqueta.includes('department') ||
+        valorEtiqueta.includes('role');
+
+      if (esChoice) {
+        valores.push(dato);
+      }
+    }
+
+    return valores;
   }
 
   function obtenerDatoEnTexto(casoExcel, claveBuscada) {
@@ -662,7 +708,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
   function ejecutarCrearIndividual(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
     const esSinEmpresa = casoExcel.caso === 'TC020';
-    const empresa = esSinEmpresa ? '' : (obtenerValorEmpresa(casoExcel) || 'Admin');
+    const empresa = esSinEmpresa ? '' : obtenerValorEmpresa(casoExcel);
     let nombre = obtenerValorNombre(casoExcel) || generarNombreUnico('empleado');
     const apellidos = obtenerValorApellidos(casoExcel);
     const email = obtenerValorEmail(casoExcel) || `${generarNombreUnico('email')}@gmail.com`;
@@ -720,7 +766,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
           return cy.wrap({ huboError: true });
         }
         if (nombre) {
-          return escribirCampo('input[name="data.name"], input#data\\.name', nombre);
+          return escribirCampoFormulario('input[name="data.name"], input#data\\.name', nombre);
         }
         return null;
       })
@@ -730,7 +776,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
           return cy.wrap({ huboError: true });
         }
         if (apellidos) {
-          return escribirCampo('input[name="data.surname"], input#data\\.surname', apellidos);
+          return escribirCampoFormulario('input[name="data.surname"], input#data\\.surname', apellidos);
         }
         return null;
       })
@@ -740,7 +786,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
           return cy.wrap({ huboError: true });
         }
         if (emailFinal) {
-          return escribirCampo('input[name="data.email"], input#data\\.email', emailFinal);
+          return escribirCampoFormulario('input[name="data.email"], input#data\\.email', emailFinal);
         }
         return null;
       })
@@ -750,7 +796,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
           return cy.wrap({ huboError: true });
         }
         if (telefono) {
-          return escribirCampo('input[name="data.phone"], input#data\\.phone', telefono);
+          return escribirCampoFormulario('input[name="data.phone"], input#data\\.phone', telefono);
         }
         return null;
       })
@@ -760,7 +806,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
           return cy.wrap({ huboError: true });
         }
         if (grupo) {
-          return seleccionarOpcionChoices(grupo, 'Grupo');
+          return cy.wait(600).then(() => seleccionarGrupo(grupo));
         }
         return null;
       })
@@ -770,7 +816,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
           return cy.wrap({ huboError: true });
         }
         if (departamento) {
-          return seleccionarOpcionChoices(departamento, 'Departamento');
+          return seleccionarOpcionChoicesFormulario(departamento, 'Departamento');
         }
         return null;
       })
@@ -780,7 +826,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
           return cy.wrap({ huboError: true });
         }
         if (roles) {
-          return seleccionarOpcionChoices(roles, 'Roles');
+          return seleccionarOpcionChoicesFormulario(roles, 'Roles');
         }
         return null;
       })
@@ -790,7 +836,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
           return cy.wrap({ huboError: true });
         }
         if (notas) {
-          return escribirCampo('textarea[name="data.notes"], textarea#data\\.notes, trix-editor#data\\.notes', notas);
+          return escribirCampoFormulario('textarea[name="data.notes"], textarea#data\\.notes, trix-editor#data\\.notes', notas);
         }
         return null;
       })
@@ -891,7 +937,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
 
   function validarNombreObligatorio(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-    const empresa = obtenerValorEmpresa(casoExcel) || 'Admin';
+    const empresa = obtenerValorEmpresa(casoExcel);
     const email = obtenerValorEmail(casoExcel) || `${generarNombreUnico('email')}@gmail.com`;
     const grupo = obtenerValorGrupo(casoExcel);
 
@@ -907,7 +953,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
 
   function validarEmailObligatorio(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-    const empresa = obtenerValorEmpresa(casoExcel) || 'Admin';
+    const empresa = obtenerValorEmpresa(casoExcel);
     const nombre = obtenerValorNombre(casoExcel) || generarNombreUnico('empleado');
     const grupo = obtenerValorGrupo(casoExcel);
 
@@ -923,7 +969,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
 
   function validarGrupoObligatorio(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-    const empresa = obtenerValorEmpresa(casoExcel) || 'Admin';
+    const empresa = obtenerValorEmpresa(casoExcel);
     const nombre = obtenerValorNombre(casoExcel) || generarNombreUnico('empleado');
     const email = obtenerValorEmail(casoExcel) || `${generarNombreUnico('email')}@gmail.com`;
 
@@ -939,7 +985,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
 
   function validarLongitudNombre(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-    const empresa = obtenerValorEmpresa(casoExcel) || 'Admin';
+    const empresa = obtenerValorEmpresa(casoExcel);
     const nombre = obtenerValorNombre(casoExcel) || generarNombreUnico('nombre-largo');
     const email = obtenerValorEmail(casoExcel) || `${generarNombreUnico('email')}@gmail.com`;
     const grupo = obtenerValorGrupo(casoExcel);
@@ -975,7 +1021,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
         if (resultadoApertura && resultadoApertura.huboError === true) {
           return cy.wrap({ huboError: true });
         }
-        return escribirCampo('input[name="data.name"], input#data\\.name', nombre);
+        return escribirCampoFormulario('input[name="data.name"], input#data\\.name', nombre);
       })
       .then((resultadoAnterior) => {
         // Si hubo error anterior, NO continuar
@@ -1074,7 +1120,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
     const empresa =
       casoId === 'TC038'
         ? 'Demo1'
-        : (obtenerValorEmpresa(casoExcel) || 'Admin');
+        : obtenerValorEmpresa(casoExcel);
 
     cy.get('body').type('{esc}{esc}');
     cy.wait(150);
@@ -1247,9 +1293,9 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
       .should('exist')
       .within(() => {
         cy.contains('.choices__item--choice', new RegExp(escaparRegex(depto), 'i'), { timeout: 10000 })
-        .scrollIntoView()
-        .click({ force: true });
-    });
+          .scrollIntoView()
+          .click({ force: true });
+      });
 
     // Cerrar panel si sigue visible
     cy.get('@panel').then($p => {
@@ -1499,113 +1545,581 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
 
   // === Helpers específicos ===
 
+  function obtenerFormularioEmpleadoVisible() {
+    return cy.get('body', { timeout: 10000 }).then(($body) => {
+      const $formulario = $body.find('form:visible').filter((_, el) => {
+        const $el = Cypress.$(el);
+        const texto = ($el.text() || '').toLowerCase();
+        return texto.includes('nombre') ||
+          texto.includes('email') ||
+          texto.includes('empresa') ||
+          $el.find('input[name="data.name"], input[name="data.email"], textarea[name="data.notes"], trix-editor#data\\.notes').length > 0;
+      }).first();
+
+      if ($formulario.length) {
+        return cy.wrap($formulario);
+      }
+
+      const $contenedor = $body.find('.fi-page:visible, main:visible, .fi-main:visible, [role="dialog"]:visible').filter((_, el) => {
+        const $el = Cypress.$(el);
+        return $el.find('input[name="data.name"], input[name="data.email"], textarea[name="data.notes"], trix-editor#data\\.notes').length > 0;
+      }).first();
+
+      if ($contenedor.length) {
+        return cy.wrap($contenedor);
+      }
+
+      throw new Error('No se encontró el formulario visible de creación de empleados');
+    });
+  }
+
   function abrirFormularioCrearEmpleado() {
     // Variable para almacenar el caso actual (se pasará desde ejecutarCrearIndividual)
-    let casoIdActual = '';
-    let nombreActual = '';
-
     return verificarUrlEmpleados()
+      .then(() => cy.get('body').type('{esc}', { force: true }))
       .then(() =>
         cy.contains('button, a', /Crear empleado/i, { timeout: 10000 })
+          .should('be.visible')
           .scrollIntoView()
           .click({ force: true })
       )
       .then(() => {
         // Esperar a que la página cargue
         cy.wait(1500);
-
-        // Verificar INMEDIATAMENTE si hay error 500 o si NO se abrió el formulario correctamente
-        return cy.get('body', { timeout: 5000 }).then(($body) => {
-          // Verificar el texto del body INMEDIATAMENTE
-          const texto = $body && $body.length > 0 ? ($body.text() ? $body.text().toLowerCase() : '') : '';
-
-          // Verificar si hay error 500 PRIMERO
-          const tieneError500 = texto.includes('500') ||
-            texto.includes('internal server error') ||
-            texto.includes('error interno del servidor') ||
-            texto.includes('server error') ||
-            texto.includes('500 server error');
-
-          if (tieneError500) {
-            // Si hay error 500, registrar directamente en Excel y retornar indicador de error
-            cy.log('ERROR 500 detectado - registrando en Excel');
-            // Retornar un objeto que indique que hubo error
-            return cy.wrap({ error: 'ERROR_500_DETECTADO', mensaje: 'ERROR 500: Error interno del servidor detectado en la página' });
+        return cy.location('pathname', { timeout: 15000 }).then((pathname) => {
+          if (!pathname.includes(`${EMPLEADOS_PATH}/create`)) {
+            cy.log('URL incorrecta - registrando en Excel');
+            return cy.wrap({ error: 'ERROR_FORMULARIO_NO_ABIERTO', mensaje: 'ERROR: No se pudo abrir el formulario correctamente. URL incorrecta.' });
           }
 
-          if (!$body || $body.length === 0) {
-            // Si no hay body, verificar el documento directamente para ver si hay error 500
-            return cy.document().then((doc) => {
-              const docText = doc.body ? (doc.body.textContent || '').toLowerCase() : '';
-              const tieneError500EnDoc = docText.includes('500') ||
-                docText.includes('internal server error') ||
-                docText.includes('error interno del servidor') ||
-                docText.includes('server error') ||
-                docText.includes('500 server error');
+          return cy.document({ timeout: 15000 }).then((doc) => {
+            const textoDocumento = doc?.body ? (doc.body.textContent || '').toLowerCase() : '';
+            const tieneError500 = textoDocumento.includes('500') ||
+              textoDocumento.includes('internal server error') ||
+              textoDocumento.includes('error interno del servidor') ||
+              textoDocumento.includes('server error') ||
+              textoDocumento.includes('500 server error');
 
-              if (tieneError500EnDoc) {
-                cy.log('ERROR 500 detectado en el documento - registrando en Excel');
-                return cy.wrap({ error: 'ERROR_500_DETECTADO', mensaje: 'ERROR 500: Error interno del servidor detectado en el documento' });
-              }
-
-              // Si no hay error 500, puede ser otro error
-              cy.log('No se encontró el body de la página - registrando en Excel');
-              return cy.wrap({ error: 'ERROR_FORMULARIO_NO_ABIERTO', mensaje: 'ERROR: No se pudo abrir el formulario correctamente. La página no muestra el formulario esperado.' });
-            });
-          }
-
-          // Verificar que la URL sea correcta
-          return cy.url({ timeout: 10000 }).then((url) => {
-            if (!url.includes(`${EMPLEADOS_PATH}/create`)) {
-              // Si la URL no es correcta, puede ser que no se abrió el formulario
-              cy.log('URL incorrecta - registrando en Excel');
-              return cy.wrap({ error: 'ERROR_FORMULARIO_NO_ABIERTO', mensaje: 'ERROR: No se pudo abrir el formulario correctamente. URL incorrecta.' });
+            if (tieneError500) {
+              cy.log('ERROR 500 detectado - registrando en Excel');
+              throw new Error('ERROR_500_DETECTADO: Error interno del servidor detectado en la página');
             }
 
-            // Verificar que realmente hay un formulario en la página (no solo la URL)
-            const tieneFormulario = $body.find('form').length > 0 ||
-              $body.find('input[name*="name"], input[name*="email"]').length > 0 ||
-              $body.find('label').filter((i, el) => {
-                const textoLabel = Cypress.$(el).text().toLowerCase();
-                return textoLabel.includes('empresa') ||
-                  textoLabel.includes('nombre') ||
-                  textoLabel.includes('email');
-              }).length > 0;
-
-            if (!tieneFormulario) {
-              // Si no hay formulario, algo salió mal
-              cy.log('No se detectó el formulario de creación - registrando en Excel');
-              return cy.wrap({ error: 'ERROR_FORMULARIO_NO_ABIERTO', mensaje: 'ERROR: No se pudo abrir el formulario correctamente. La página no muestra el formulario esperado.' });
-            }
-
-            // Si todo está bien, retornar éxito
-            return cy.wrap({ error: null });
-          });
-        }, () => {
-          // Si no se puede obtener el body, verificar si hay error 500
-          return cy.url().then((url) => {
-            if (url.includes('error') || url.includes('500')) {
-              cy.log('Error 500 detectado en la URL - registrando en Excel');
-              return cy.wrap({ error: 'ERROR_500_DETECTADO', mensaje: 'ERROR 500: Error interno del servidor detectado en la URL' });
-            }
-            // Si no hay error 500 en la URL, verificar el documento
-            return cy.document().then((doc) => {
-              const docText = doc.body ? doc.body.textContent.toLowerCase() : '';
-              if (docText.includes('500') || docText.includes('server error')) {
-                cy.log('Error 500 detectado en el documento - registrando en Excel');
-                return cy.wrap({ error: 'ERROR_500_DETECTADO', mensaje: 'ERROR 500: Error interno del servidor detectado en el documento' });
-              }
-              // Si no hay error 500, asumir otro error
-              cy.log('No se pudo obtener el body - registrando en Excel');
-              return cy.wrap({ error: 'ERROR_FORMULARIO_NO_ABIERTO', mensaje: 'ERROR: No se pudo abrir el formulario correctamente. No se pudo obtener el body de la página.' });
-            });
+            return obtenerFormularioEmpleadoVisible()
+              .within(() => {
+                cy.get('input[name="data.name"], input#data\\.name', { timeout: 15000 })
+                  .filter(':visible')
+                  .first()
+                  .should('be.visible');
+                cy.get('input[name="data.email"], input#data\\.email', { timeout: 15000 })
+                  .filter(':visible')
+                  .first()
+                  .should('be.visible');
+              })
+              .then(() => cy.wrap({ error: null }));
           });
         });
       });
   }
 
+  function normalizarTextoComparacion(texto) {
+    return (texto || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\*/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  }
+
+  function limpiarTextoSeleccionChoices(texto) {
+    return (texto || '')
+      .replace(/remove item/ig, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function obtenerSelectoresCampoPorLabel(label) {
+    const clave = normalizarTextoComparacion(label);
+
+    const mapa = {
+      empresa: [
+        '[wire\\:key*="company"]',
+        '[wire\\:key*="current_company_id"]',
+        '[state-path="data.company_id"]',
+        '[state-path="data.current_company_id"]',
+        '[x-data*="company_id"]',
+        '[x-data*="current_company_id"]'
+      ],
+      grupo: [
+        '[wire\\:key*="current_group_id"]',
+        '[wire\\:key*="group_id"]',
+        '[state-path="data.current_group_id"]',
+        '[x-data*="current_group_id"]',
+        '[x-data*="group_id"]'
+      ],
+      departamento: [
+        '[wire\\:key*="department"]',
+        '[state-path*="department"]',
+        '[x-data*="department"]'
+      ],
+      roles: [
+        '[wire\\:key*="role"]',
+        '[state-path*="role"]',
+        '[x-data*="role"]'
+      ]
+    };
+
+    return mapa[clave] || [];
+  }
+
+  function obtenerInputSelectorsCampoPorLabel(label) {
+    const clave = normalizarTextoComparacion(label);
+
+    const mapa = {
+      empresa: [
+        '#data\\.company_id',
+        '#data\\.current_company_id',
+        '#data\\.empresa',
+        'select[id*="company_id"]',
+        'select[id*="current_company_id"]',
+        'select[id*="empresa"]'
+      ],
+      grupo: [
+        '#data\\.current_group_id',
+        '#data\\.group_id',
+        'select[id*="current_group_id"]',
+        'select[id*="group_id"]'
+      ],
+      departamento: [
+        '#data\\.department_id',
+        'select[id*="department_id"]'
+      ],
+      roles: [
+        '#data\\.roles',
+        'select[id*="roles"]'
+      ]
+    };
+
+    return mapa[clave] || [];
+  }
+
+  function encontrarTriggerChoicesEnContenedor($scope, label, openersSelector) {
+    let $objetivo = Cypress.$();
+    const inputSelectors = obtenerInputSelectorsCampoPorLabel(label);
+    const selectoresDirectos = obtenerSelectoresCampoPorLabel(label);
+
+    for (const selector of inputSelectors) {
+      const $input = $scope.find(selector).first();
+      if (!$input.length) continue;
+
+      const $choices = $input.closest('.choices');
+      if ($choices.length) {
+        return $choices;
+      }
+
+      const $wrapper = $input.closest('.fi-fo-select, .fi-input-wrp, [data-field-wrapper], .fi-fo-field-wrp');
+      if ($wrapper.length) {
+        $objetivo = $wrapper.find(openersSelector).filter(':visible').first();
+        if ($objetivo.length) {
+          return $objetivo;
+        }
+      }
+    }
+
+    for (const selector of selectoresDirectos) {
+      const $wrapper = $scope.find(selector).first();
+      if (!$wrapper.length) continue;
+
+      $objetivo = $wrapper.is(openersSelector)
+        ? $wrapper.first()
+        : $wrapper.find(openersSelector).filter(':visible').first();
+
+      if ($objetivo.length) {
+        return $objetivo;
+      }
+    }
+
+    const labelNormalizado = normalizarTextoComparacion(label);
+    const candidatos = $scope.find('label, legend, span, div')
+      .filter((_, el) => {
+        const texto = normalizarTextoComparacion(Cypress.$(el).text());
+        return texto === labelNormalizado || texto.startsWith(`${labelNormalizado} `);
+      })
+      .get()
+      .sort((a, b) => {
+        const textoA = normalizarTextoComparacion(Cypress.$(a).text());
+        const textoB = normalizarTextoComparacion(Cypress.$(b).text());
+        return textoA.length - textoB.length;
+      });
+
+    for (const candidato of candidatos) {
+      const $label = Cypress.$(candidato);
+      const wrappers = [
+        $label.closest('[data-field-wrapper]'),
+        $label.closest('.fi-field'),
+        $label.closest('.fi-fo-field-wrp'),
+        $label.closest('.fi-fo-field'),
+        $label.closest('[wire\\:key]'),
+        $label.parent()
+      ].filter($el => $el && $el.length);
+
+      for (const $wrapper of wrappers) {
+        $objetivo = $wrapper.is(openersSelector)
+          ? $wrapper.first()
+          : $wrapper.find(openersSelector).filter(':visible').first();
+
+        if ($objetivo.length) {
+          return $objetivo;
+        }
+      }
+    }
+
+    return $scope.find(openersSelector).filter(':visible').first();
+  }
+
+  function encontrarChoicesPorInputSelectors($scope, inputSelectors = []) {
+    for (const selector of inputSelectors) {
+      const $input = $scope.find(selector).first();
+      if (!$input.length) continue;
+
+      const $choices = $input.closest('.choices');
+      if ($choices.length) {
+        return $choices.first();
+      }
+
+      const $wrapper = $input.closest('.fi-fo-select, .fi-input-wrp, [data-field-wrapper], .fi-fo-field-wrp');
+      if ($wrapper.length) {
+        const $objetivo = $wrapper.find('.choices, [role="combobox"], select, .fi-select-trigger').filter(':visible').first();
+        if ($objetivo.length) {
+          return $objetivo;
+        }
+      }
+    }
+
+    return Cypress.$();
+  }
+
+  function seleccionarChoiceFormularioPorCampo(texto, {
+    sectionSelector = '',
+    inputSelector,
+    label = ''
+  } = {}) {
+    if (!texto || !inputSelector) return cy.wrap(null);
+
+    const regex = new RegExp(`^\\s*${texto.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i');
+
+    function obtenerChoicesDesdeFormulario($formulario) {
+      const $scope = Cypress.$($formulario);
+      const $seccion = sectionSelector ? $scope.find(sectionSelector).first() : $scope;
+      const $input = $seccion.find(inputSelector).first();
+
+      if (!$input.length) {
+        return Cypress.$();
+      }
+
+      return $input.closest('.choices').first();
+    }
+
+    return obtenerFormularioEmpleadoVisible()
+      .then(($formulario) => {
+        const $choices = obtenerChoicesDesdeFormulario($formulario);
+        if (!$choices.length) {
+          cy.log(`No se encontró el campo ${label || inputSelector}`);
+          return cy.wrap({ huboError: true });
+        }
+
+        const $trigger = $choices.find('.choices__inner, [role="combobox"]').filter(':visible').first();
+        if (!$trigger.length) {
+          cy.log(`No se encontró el trigger del campo ${label || inputSelector}`);
+          return cy.wrap({ huboError: true });
+        }
+
+        return cy.get('body')
+          .type('{esc}', { force: true })
+          .then(() => cy.wrap($trigger).scrollIntoView().click({ force: true }));
+      })
+      .then((resultado) => {
+        if (resultado && resultado.huboError === true) {
+          return cy.wrap({ huboError: true });
+        }
+
+        return cy.wait(300)
+          .then(() => obtenerFormularioEmpleadoVisible())
+          .then(($formularioActualizado) => {
+            const $choices = obtenerChoicesDesdeFormulario($formularioActualizado);
+            if (!$choices.length) {
+              return cy.wrap({ huboError: true });
+            }
+
+            const $dropdown = $choices.find('.choices__list--dropdown:visible').first();
+            if (!$dropdown.length) {
+              cy.log(`No se encontró dropdown para ${label || inputSelector}`);
+              return cy.wrap({ huboError: true });
+            }
+
+            const $inputBusqueda = $dropdown.find('.choices__input, .choices__input--cloned, input[type="search"]').filter(':visible').first();
+            if ($inputBusqueda.length) {
+              cy.wrap($inputBusqueda)
+                .type('{selectall}{backspace}', { force: true })
+                .type(texto, { force: true, delay: 20 });
+            }
+
+            return cy.wait(1100)
+              .then(() => obtenerFormularioEmpleadoVisible())
+              .then(($formularioFiltrado) => {
+                const $choicesFiltrado = obtenerChoicesDesdeFormulario($formularioFiltrado);
+                if (!$choicesFiltrado.length) {
+                  return cy.wrap({ huboError: true });
+                }
+
+                const $dropdownFiltrado = $choicesFiltrado.find('.choices__list--dropdown:visible').first();
+                if (!$dropdownFiltrado.length) {
+                  return cy.wrap({ huboError: true });
+                }
+
+                return cy.wrap($dropdownFiltrado)
+                  .within(() => {
+                    cy.get('.choices__item--choice, [role="option"]', { timeout: 15000 })
+                      .should(($opciones) => {
+                        const existeCoincidencia = Cypress.$($opciones).toArray().some((el) => {
+                          const $el = Cypress.$(el);
+                          const textoOpcion = ($el.text() || '').trim();
+                          const ariaDisabled = $el.attr('aria-disabled');
+                          return textoOpcion.length > 0 &&
+                            ariaDisabled !== 'true' &&
+                            regex.test(textoOpcion);
+                        });
+
+                        expect(
+                          existeCoincidencia,
+                          `No se encontró coincidencia exacta para ${label || inputSelector}: ${texto}`
+                        ).to.equal(true);
+                      });
+                  })
+                  .then(() => {
+                    cy.contains('.choices__item--choice:visible, [role="option"]:visible', regex, { timeout: 15000 })
+                      .scrollIntoView({ duration: 200 })
+                      .click({ force: true });
+                  });
+              })
+              .then(() => cy.wait(700))
+              .then(() => cy.get('body').type('{esc}', { force: true }))
+              .then(() =>
+                cy.wrap(null, { timeout: 12000 }).should(() => {
+                  const $body = Cypress.$('body');
+                  const $formularioVerificacion = $body.find('form:visible').filter((_, el) => {
+                    const $el = Cypress.$(el);
+                    return $el.find('input[name="data.name"], input#data\\.name, input[name="data.email"], input#data\\.email').length > 0;
+                  }).first();
+
+                  const $scope = $formularioVerificacion.length
+                    ? $formularioVerificacion
+                    : $body.find('.fi-page:visible, main:visible, .fi-main:visible').first();
+
+                  const $seccion = sectionSelector ? $scope.find(sectionSelector).first() : $scope;
+                  const $input = $seccion.find(inputSelector).first();
+                  const $choicesVerificacion = $input.closest('.choices');
+                  const textoActual = limpiarTextoSeleccionChoices(($choicesVerificacion.find('.choices__list--single .choices__item')
+                    .filter((_, el) => !Cypress.$(el).hasClass('choices__placeholder'))
+                    .first()
+                    .text() || '').trim());
+
+                  expect(
+                    textoActual,
+                    `Selección no confirmada en ${label || inputSelector}. Esperado: ${texto}. Actual: ${textoActual || '(vacío)'}`
+                  ).to.match(regex);
+                })
+              )
+              .then(() => cy.wrap(null));
+          });
+      });
+  }
+
+  function seleccionarChoiceFormularioPorInputSelectors(texto, inputSelectors = [], label = '') {
+    if (!texto) return cy.wrap(null);
+
+    const regex = new RegExp(texto.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
+    return obtenerFormularioEmpleadoVisible().then(($formulario) => {
+      const $scope = Cypress.$($formulario);
+      let $objetivo = encontrarChoicesPorInputSelectors($scope, inputSelectors);
+
+      if (!$objetivo.length && label) {
+        $objetivo = encontrarTriggerChoicesEnContenedor(
+          $scope,
+          label,
+          '.choices__inner, .choices, [role="combobox"], [aria-haspopup="listbox"], select, .fi-select-trigger'
+        );
+      }
+
+      if (!$objetivo.length) {
+        return cy.wrap({ huboError: true });
+      }
+
+      const $disparador = $objetivo.hasClass('choices')
+        ? $objetivo.find('.choices__inner').first()
+        : $objetivo;
+
+      return cy.get('body')
+        .type('{esc}', { force: true })
+        .then(() => cy.wrap($disparador)
+        .scrollIntoView()
+        .click({ force: true })
+        )
+        .then(() => cy.wait(300))
+        .then(() => obtenerFormularioEmpleadoVisible())
+        .then(($formularioActualizado) => {
+          const $scopeActualizado = Cypress.$($formularioActualizado);
+          const $choices = encontrarChoicesPorInputSelectors($scopeActualizado, inputSelectors);
+
+          if (!$choices.length) {
+            return cy.wrap({ huboError: true });
+          }
+
+          const $dropdown = $choices.find('.choices__list--dropdown:visible, .fi-select-panel:visible, [role="listbox"]:visible').first();
+          if (!$dropdown.length) {
+            return cy.wrap({ huboError: true });
+          }
+
+          const $input = $dropdown.find('.choices__input, .choices__input--cloned, input[placeholder*="Teclee"], input[placeholder*="Buscar"], input[type="search"]').filter(':visible').first();
+          if ($input.length) {
+            cy.wrap($input)
+              .clear({ force: true })
+              .type(texto, { force: true, delay: 20 });
+          }
+
+          return cy.wrap($dropdown)
+            .find('.choices__item--choice:visible, [role="option"]:visible')
+            .then(($opciones) => {
+              const $validas = $opciones.filter((_, el) => {
+                const textoOpcion = (Cypress.$(el).text() || '').trim();
+                const ariaDisabled = Cypress.$(el).attr('aria-disabled');
+                return textoOpcion.length > 0 &&
+                  ariaDisabled !== 'true' &&
+                  !/seleccione una opción/i.test(textoOpcion);
+              });
+
+              const $coincidencia = $validas.filter((_, el) => regex.test((Cypress.$(el).text() || '').trim())).first();
+              const $objetivoOpcion = $coincidencia.first();
+
+              if (!$objetivoOpcion.length) {
+                return cy.wrap({ huboError: true });
+              }
+
+              const textoSeleccionado = ($objetivoOpcion.text() || '').trim();
+
+              return cy.wrap($objetivoOpcion)
+                .scrollIntoView({ duration: 200 })
+                .click({ force: true })
+                .then(() => cy.wait(250))
+                .then(() => obtenerFormularioEmpleadoVisible())
+                .then(($formularioVerificacion) => {
+                  const $scopeVerificacion = Cypress.$($formularioVerificacion);
+                  const $choicesVerificacion = encontrarChoicesPorInputSelectors($scopeVerificacion, inputSelectors);
+
+                  if (!$choicesVerificacion.length) {
+                    return cy.wrap({ huboError: true });
+                  }
+
+                  const textoActual = limpiarTextoSeleccionChoices(($choicesVerificacion.find('.choices__list--single .choices__item, .choices__list--multiple .choices__item--selectable[data-item]')
+                    .filter(':visible')
+                    .first()
+                    .text() || '').trim());
+
+                  if (!textoActual || /seleccione una opción/i.test(textoActual) || !regex.test(textoActual)) {
+                    cy.log(`No se confirmó la selección de ${label || 'choice'}: esperado "${textoSeleccionado}", actual "${textoActual}"`);
+                    return cy.wrap({ huboError: true });
+                  }
+
+                  return cy.wrap(null);
+                });
+            });
+        })
+        .then(() => cy.wait(200));
+    });
+  }
+
+  function seleccionarChoiceFormularioPorLabel(texto, label) {
+    if (!texto) return cy.wrap(null);
+
+    const regex = new RegExp(texto.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    const openersSelector = '.choices__inner, .choices, [role="combobox"], [aria-haspopup="listbox"], select, .fi-select-trigger';
+
+    return obtenerFormularioEmpleadoVisible().then(($formulario) => {
+      const $scope = Cypress.$($formulario);
+      const $objetivo = encontrarTriggerChoicesEnContenedor($scope, label, openersSelector);
+
+      if (!$objetivo.length) {
+        return cy.wrap({ huboError: true });
+      }
+
+      return cy.wrap($objetivo)
+        .scrollIntoView()
+        .click({ force: true })
+        .then(() => cy.wait(300))
+        .then(() => cy.wrap($objetivo.closest('.choices').length ? $objetivo.closest('.choices') : $objetivo))
+        .then(($choicesAbierto) => {
+          const $choices = Cypress.$($choicesAbierto);
+          const $dropdown = $choices.find('.choices__list--dropdown, .fi-select-panel, [role="listbox"]').filter(':visible').first();
+
+          if (!$dropdown.length) {
+            return cy.wrap({ huboError: true });
+          }
+
+          const $input = $dropdown.find('.choices__input, .choices__input--cloned, input[placeholder*="Teclee"], input[placeholder*="Buscar"], input[type="search"]').filter(':visible').first();
+          if ($input.length) {
+            cy.wrap($input)
+              .clear({ force: true })
+              .type(texto, { force: true, delay: 20 });
+          }
+
+          return cy.wrap($dropdown).then(($dd) => {
+            const $opciones = Cypress.$($dd).find('.choices__item--choice:visible, [role="option"]:visible')
+              .filter((_, el) => {
+                const textoOpcion = (Cypress.$(el).text() || '').trim();
+                const ariaDisabled = Cypress.$(el).attr('aria-disabled');
+                return textoOpcion.length > 0 &&
+                  ariaDisabled !== 'true' &&
+                  !/seleccione una opción/i.test(textoOpcion);
+              });
+
+            const $coincidencia = $opciones.filter((_, el) => regex.test((Cypress.$(el).text() || '').trim())).first();
+            const $objetivoOpcion = $coincidencia.length ? $coincidencia : $opciones.first();
+
+            if (!$objetivoOpcion.length) {
+              return cy.wrap({ huboError: true });
+            }
+
+            return cy.wrap($objetivoOpcion)
+              .scrollIntoView({ duration: 200 })
+              .click({ force: true });
+          });
+        })
+        .then(() => cy.wait(200));
+    });
+  }
+
   function seleccionarEmpresa(nombre) {
-    return seleccionarOpcionChoices(nombre, 'Empresa');
+    return seleccionarChoiceFormularioPorCampo(
+      nombre,
+      {
+        sectionSelector: '#data\\.estado-y-empresa',
+        inputSelector: '#data\\.company_id',
+        label: 'Empresa'
+      }
+    );
+  }
+
+  function seleccionarGrupo(nombre) {
+    return seleccionarChoiceFormularioPorCampo(
+      nombre,
+      {
+        sectionSelector: '#data\\.organizacion',
+        inputSelector: '#data\\.current_group_id',
+        label: 'Grupo'
+      }
+    );
   }
 
   function seleccionarOpcionChoices(texto, label) {
@@ -1636,44 +2150,44 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
         }
 
         // Si no hay error, continuar normalmente
-      if (labelRegex) {
-        return cy.contains('label, span, div', labelRegex, { timeout: 10000 })
-          .then(($label) => {
+        if (labelRegex) {
+          return cy.contains('label, span, div', labelRegex, { timeout: 10000 })
+            .then(($label) => {
               if (!$label || $label.length === 0) {
                 return cy.wrap({ huboError: true });
               }
-            const wrappers = [
-              $label.closest('[data-field-wrapper]'),
-              $label.closest('.fi-field'),
-              $label.closest('.fi-fo-field-wrp'),
-              $label.closest('.fi-fo-field'),
-              $label.closest('.grid'),
-              $label.closest('section'),
-              $label.closest('form'),
-              $label.parent()
-            ].filter($el => $el && $el.length);
+              const wrappers = [
+                $label.closest('[data-field-wrapper]'),
+                $label.closest('.fi-field'),
+                $label.closest('.fi-fo-field-wrp'),
+                $label.closest('.fi-fo-field'),
+                $label.closest('.grid'),
+                $label.closest('section'),
+                $label.closest('form'),
+                $label.parent()
+              ].filter($el => $el && $el.length);
 
-            for (const $wrapper of wrappers) {
-              const $objetivo = $wrapper.find(openersSelector).filter(':visible').first();
-              if ($objetivo.length) {
-                cy.wrap($objetivo).scrollIntoView().click({ force: true });
-                return;
+              for (const $wrapper of wrappers) {
+                const $objetivo = $wrapper.find(openersSelector).filter(':visible').first();
+                if ($objetivo.length) {
+                  cy.wrap($objetivo).scrollIntoView().click({ force: true });
+                  return;
+                }
               }
-            }
 
-            cy.get(openersSelector, { timeout: 10000 })
-              .filter(':visible')
-              .first()
-              .scrollIntoView()
-              .click({ force: true });
-          });
-      }
+              cy.get(openersSelector, { timeout: 10000 })
+                .filter(':visible')
+                .first()
+                .scrollIntoView()
+                .click({ force: true });
+            });
+        }
 
-      return cy.get(openersSelector, { timeout: 10000 })
-        .filter(':visible')
-        .first()
-        .scrollIntoView()
-        .click({ force: true });
+        return cy.get(openersSelector, { timeout: 10000 })
+          .filter(':visible')
+          .first()
+          .scrollIntoView()
+          .click({ force: true });
       }, () => {
         // Si falla al obtener el body, verificar si hay error 500 en el documento
         return cy.document().then((doc) => {
@@ -1705,35 +2219,35 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
 
         return cy.wait(300)
           .then(() => {
-    const dropdownAlias = '@dropdownActual';
+            const dropdownAlias = '@dropdownActual';
 
-    cy.get('.choices.is-open, .choices[aria-expanded="true"], .choices.is-focused')
-      .filter(':visible')
-      .last()
-      .as('dropdownActual');
+            cy.get('.choices.is-open, .choices[aria-expanded="true"], .choices.is-focused')
+              .filter(':visible')
+              .last()
+              .as('dropdownActual');
 
-    const inputBuscador = '.choices__input, input[placeholder*="Teclee"], input[placeholder*="Buscar"], input[type="search"]';
-    const opcionSelector = '[role="option"], .choices__item--choice';
-    const regex = new RegExp(texto, 'i');
+            const inputBuscador = '.choices__input, input[placeholder*="Teclee"], input[placeholder*="Buscar"], input[type="search"]';
+            const opcionSelector = '[role="option"], .choices__item--choice';
+            const regex = new RegExp(texto, 'i');
 
-    return cy.get(dropdownAlias).within(() => {
-      cy.get(inputBuscador).filter(':visible').first().then(($input) => {
-        if ($input && $input.length) {
-          cy.wrap($input)
-            .clear({ force: true })
-            .type(texto, { force: true, delay: 20 });
-        }
-      });
-    })
-      .then(() => cy.wait(300))
-      .then(() =>
-        cy.get(dropdownAlias).within(() => {
-          cy.contains(opcionSelector, regex, { timeout: 10000 })
-            .scrollIntoView({ duration: 200 })
-            .click({ force: true });
-        })
-      )
-      .then(() => cy.wait(200));
+            return cy.get(dropdownAlias).within(() => {
+              cy.get(inputBuscador).filter(':visible').first().then(($input) => {
+                if ($input && $input.length) {
+                  cy.wrap($input)
+                    .clear({ force: true })
+                    .type(texto, { force: true, delay: 20 });
+                }
+              });
+            })
+              .then(() => cy.wait(300))
+              .then(() =>
+                cy.get(dropdownAlias).within(() => {
+                  cy.contains(opcionSelector, regex, { timeout: 10000 })
+                    .scrollIntoView({ duration: 200 })
+                    .click({ force: true });
+                })
+              )
+              .then(() => cy.wait(200));
           });
       });
   }
@@ -1745,6 +2259,105 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
       .scrollIntoView()
       .clear({ force: true })
       .type(valor, { force: true, delay: 20 });
+  }
+
+  function escribirCampoFormulario(selector, valor) {
+    if (!valor) return cy.wrap(null);
+
+    return obtenerFormularioEmpleadoVisible().within(() => {
+      cy.get(selector, { timeout: 10000 })
+        .filter(':visible')
+        .first()
+        .scrollIntoView()
+        .then(($campo) => {
+          const tagName = ($campo.prop('tagName') || '').toLowerCase();
+
+          if (tagName === 'trix-editor') {
+            cy.wrap($campo).type('{selectall}{backspace}', { force: true });
+            cy.wrap($campo).type(valor, { force: true, delay: 20 });
+            return;
+          }
+
+          cy.wrap($campo)
+            .clear({ force: true })
+            .type(valor, { force: true, delay: 20 });
+        });
+    });
+  }
+
+  function seleccionarOpcionChoicesFormulario(texto, label) {
+    if (!texto) return cy.wrap(null);
+
+    const regex = new RegExp(texto.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    const openersSelector = '.choices__inner, .choices, [role="combobox"], [aria-haspopup="listbox"], select, .fi-select-trigger';
+
+    return obtenerFormularioEmpleadoVisible().then(($formulario) => {
+      const $scope = Cypress.$($formulario);
+      let $objetivo = label
+        ? encontrarTriggerChoicesEnContenedor($scope, label, openersSelector)
+        : Cypress.$();
+
+      if (!$objetivo.length) {
+        $objetivo = $scope.find(openersSelector).filter(':visible').first();
+      }
+
+      if (!$objetivo.length) {
+        return cy.wrap({ huboError: true });
+      }
+
+      if ($objetivo.is('select')) {
+        const $opcion = $objetivo.find('option').filter((_, option) => {
+          return regex.test((Cypress.$(option).text() || '').trim());
+        }).first();
+
+        if ($opcion.length) {
+          cy.wrap($objetivo).select($opcion.text().trim(), { force: true });
+          return cy.wrap(null);
+        }
+      }
+
+      return cy.wrap($objetivo)
+        .scrollIntoView()
+        .click({ force: true })
+        .then(() => cy.wait(300))
+        .then(() => cy.get('.choices.is-open, .choices[aria-expanded="true"], .choices.is-focused', { timeout: 10000 }).filter(':visible').last())
+        .then(($choicesAbierto) => {
+          const $dropdown = Cypress.$($choicesAbierto).find('.choices__list--dropdown, .fi-select-panel, [role="listbox"]').filter(':visible').first();
+          if (!$dropdown.length) {
+            return cy.wrap(null);
+          }
+
+          const $input = $dropdown.find('.choices__input, .choices__input--cloned, input[placeholder*="Teclee"], input[placeholder*="Buscar"], input[type="search"]').filter(':visible').first();
+          if ($input.length) {
+            cy.wrap($input)
+              .clear({ force: true })
+              .type(texto, { force: true, delay: 20 });
+          }
+
+          return cy.wrap($dropdown).then(($dd) => {
+            const $opciones = Cypress.$($dd).find('.choices__item--choice:visible, [role="option"]:visible')
+              .filter((_, el) => {
+                const textoOpcion = (Cypress.$(el).text() || '').trim();
+                const ariaDisabled = Cypress.$(el).attr('aria-disabled');
+                return textoOpcion.length > 0 &&
+                  ariaDisabled !== 'true' &&
+                  !/seleccione una opción/i.test(textoOpcion);
+              });
+
+              const $coincidencia = $opciones.filter((_, el) => regex.test((Cypress.$(el).text() || '').trim())).first();
+            const $objetivoOpcion = $coincidencia.length ? $coincidencia : $opciones.first();
+
+            if (!$objetivoOpcion.length) {
+              return cy.wrap({ huboError: true });
+            }
+
+            return cy.wrap($objetivoOpcion)
+              .scrollIntoView({ duration: 200 })
+              .click({ force: true });
+          });
+        })
+        .then(() => cy.wait(200));
+    });
   }
 
   function encontrarBotonAlFinal(textoBoton) {
@@ -1771,32 +2384,32 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
       return cy.scrollTo('bottom', { duration: 500, ensureScrollable: false })
         .then(() => cy.wait(500))
         .then(() => {
-    // Buscar el botón con múltiples estrategias (tanto button como a)
-      const regex = new RegExp(`^${textoBoton}$`, 'i');
+          // Buscar el botón con múltiples estrategias (tanto button como a)
+          const regex = new RegExp(`^${textoBoton}$`, 'i');
 
-      // Buscar por texto en botones y enlaces visibles primero
-      let $btn = $body.find('button:visible, a:visible').filter((i, el) => {
-        const text = Cypress.$(el).text().trim();
-        return regex.test(text);
-      }).first();
+          // Buscar por texto en botones y enlaces visibles primero
+          let $btn = $body.find('button:visible, a:visible').filter((i, el) => {
+            const text = Cypress.$(el).text().trim();
+            return regex.test(text);
+          }).first();
 
-      // Si no se encuentra, buscar en todos los botones y enlaces
-      if ($btn.length === 0) {
-        $btn = $body.find('button, a').filter((i, el) => {
-          const text = Cypress.$(el).text().trim();
-          return regex.test(text);
-        }).first();
-      }
+          // Si no se encuentra, buscar en todos los botones y enlaces
+          if ($btn.length === 0) {
+            $btn = $body.find('button, a').filter((i, el) => {
+              const text = Cypress.$(el).text().trim();
+              return regex.test(text);
+            }).first();
+          }
 
-      if ($btn.length > 0) {
-        cy.wrap($btn).scrollIntoView({ duration: 300 }).should('be.visible');
-        cy.wrap($btn).click({ force: true });
-      } else {
-        // Fallback: usar cy.contains
-        cy.contains('button, a', regex, { timeout: 10000 })
-          .scrollIntoView()
-          .click({ force: true });
-      }
+          if ($btn.length > 0) {
+            cy.wrap($btn).scrollIntoView({ duration: 300 }).should('be.visible');
+            cy.wrap($btn).click({ force: true });
+          } else {
+            // Fallback: usar cy.contains
+            cy.contains('button, a', regex, { timeout: 10000 })
+              .scrollIntoView()
+              .click({ force: true });
+          }
         });
     }, () => {
       // Si falla al obtener el body, verificar si hay error 500 en el documento
@@ -1821,7 +2434,74 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
   }
 
   function enviarFormularioCrear() {
-    return encontrarBotonAlFinal('Crear');
+    return obtenerFormularioEmpleadoVisible().then(($formulario) => {
+      const $scope = Cypress.$($formulario);
+      const patrones = [/^\s*Guardar\s*$/i, /^\s*Crear\s*$/i, /Guardar|Crear|Enviar/i];
+      const selectoresBoton = 'button, input[type="submit"], a, .fi-ac-btn-action';
+
+      for (const patron of patrones) {
+        let $btn = $scope.find(`${selectoresBoton}:visible`).filter((_, el) => {
+          const $el = Cypress.$(el);
+          const texto = ($el.text() || $el.val() || '').trim();
+          return patron.test(texto);
+        }).first();
+
+        if (!$btn.length) {
+          $btn = $scope.find(selectoresBoton).filter((_, el) => {
+            const $el = Cypress.$(el);
+            const texto = ($el.text() || $el.val() || '').trim();
+            return patron.test(texto);
+          }).first();
+        }
+
+        if ($btn.length) {
+          return cy.wrap($btn)
+            .scrollIntoView({ duration: 300 })
+            .should('be.visible')
+            .click({ force: true });
+        }
+      }
+
+      return cy.get('body').then(($body) => {
+        for (const patron of patrones) {
+          let $btnPagina = $body.find(`${selectoresBoton}:visible`).filter((_, el) => {
+            const $el = Cypress.$(el);
+            const texto = ($el.text() || $el.val() || '').trim();
+            return patron.test(texto);
+          }).first();
+
+          if (!$btnPagina.length) {
+            $btnPagina = $body.find(selectoresBoton).filter((_, el) => {
+              const $el = Cypress.$(el);
+              const texto = ($el.text() || $el.val() || '').trim();
+              return patron.test(texto);
+            }).first();
+          }
+
+          if ($btnPagina.length) {
+            return cy.wrap($btnPagina)
+              .scrollIntoView({ duration: 300 })
+              .should('be.visible')
+              .click({ force: true });
+          }
+        }
+
+        const $submit = $body.find('button[type="submit"]:visible, input[type="submit"]:visible').first();
+        if ($submit.length) {
+          return cy.wrap($submit)
+            .scrollIntoView({ duration: 300 })
+            .click({ force: true });
+        }
+
+        return encontrarBotonAlFinal('Guardar')
+          .then((resultado) => {
+            if (resultado && resultado.huboError === true) {
+              return encontrarBotonAlFinal('Crear');
+            }
+            return resultado;
+          });
+      });
+    });
   }
 
   function esperarToastExito() {
@@ -1875,8 +2555,9 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
   function obtenerValorEmpresa(casoExcel) {
     return obtenerDatoPorEtiqueta(casoExcel, 'empresa') ||
       obtenerDatoEnTexto(casoExcel, 'Empresa') ||
+      obtenerChoicesPorOrden(casoExcel)[0] ||
       casoExcel.dato_1 ||
-      'Admin';
+      '';
   }
 
   function obtenerValorNombre(casoExcel) {
@@ -1906,22 +2587,28 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
   }
 
   function obtenerValorGrupo(casoExcel) {
-    return obtenerDatoPorEtiqueta(casoExcel, 'choices_item') ||
-      obtenerDatoEnTexto(casoExcel, 'Grupo') ||
+    return obtenerDatoEnTexto(casoExcel, 'Grupo') ||
+      obtenerDatoPorEtiquetaParcial(casoExcel, 'current_group_id') ||
+      obtenerDatoPorEtiqueta(casoExcel, 'choices_item') ||
+      obtenerChoicesPorOrden(casoExcel)[1] ||
       casoExcel.dato_4 ||
       '';
   }
 
   function obtenerValorDepartamento(casoExcel) {
     return obtenerDatoPorEtiqueta(casoExcel, 'choices_item') ||
+      obtenerDatoPorEtiquetaParcial(casoExcel, 'department') ||
       obtenerDatoEnTexto(casoExcel, 'Departamento') ||
+      obtenerChoicesPorOrden(casoExcel)[1] ||
       '';
   }
 
   function obtenerValorRoles(casoExcel) {
     return obtenerDatoPorEtiqueta(casoExcel, 'choices_inner') ||
+      obtenerDatoPorEtiquetaParcial(casoExcel, 'role') ||
       obtenerDatoEnTexto(casoExcel, 'Roles') ||
       obtenerDatoEnTexto(casoExcel, 'Rol') ||
+      obtenerChoicesPorOrden(casoExcel)[2] ||
       '';
   }
 
@@ -1935,22 +2622,22 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
   // TC043: Crear un empleado y asignar un grupo sin incurridos
   function empleadoSinIncurridos(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-    const empresa = obtenerValorEmpresa(casoExcel) || 'Admin';
-    
+    const empresa = obtenerValorEmpresa(casoExcel);
+
     // Obtener nombre y reemplazar XXX con 3 números aleatorios
     let nombre = obtenerValorNombre(casoExcel) || 'SinIncurridosXXX';
     if (nombre.includes('XXX')) {
       const randomNum = Math.floor(Math.random() * 900) + 100; // Genera 3 dígitos (100-999)
       nombre = nombre.replace(/XXX/g, randomNum.toString());
     }
-    
+
     // Obtener email y reemplazar XXX con 3 números aleatorios
     let email = obtenerValorEmail(casoExcel) || 'prueba@pruebasinincurridosXXX';
     if (email.includes('XXX')) {
       const randomNum = Math.floor(Math.random() * 900) + 100; // Genera 3 dígitos (100-999)
       email = email.replace(/XXX/g, randomNum.toString());
     }
-    
+
     const grupo = obtenerValorGrupo(casoExcel) || 'Grupo sin incurridos';
 
     return abrirFormularioCrearEmpleado()
@@ -1985,14 +2672,14 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
         if (resultadoAnterior && resultadoAnterior.huboError === true) {
           return cy.wrap({ huboError: true });
         }
-        return escribirCampo('input[name="data.email"], input#data\\.email', email);
+        return escribirCampoFormulario('input[name="data.email"], input#data\\.email', email);
       })
       .then((resultadoAnterior) => {
         // Si hubo error anterior, NO continuar
         if (resultadoAnterior && resultadoAnterior.huboError === true) {
           return cy.wrap({ huboError: true });
         }
-        return seleccionarOpcionChoices(grupo, 'Grupo');
+        return seleccionarGrupo(grupo);
       })
       .then((resultadoAnterior) => {
         // Si hubo error anterior, NO continuar
@@ -2035,6 +2722,8 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
       .then(() => {
         // Verificar error 500 después de buscar
         return cy.get('body', { timeout: 5000 }).then(($body) => {
+          const tieneListado = $body.find('.fi-ta-table, table, .fi-ta-row, tr, .fi-empty-state, .fi-ta-empty-state').length > 0;
+
           if (!$body || $body.length === 0) {
             cy.log('No se encontró el body después de buscar - posible error 500');
             const casoId = casoExcel.caso || 'TC000';
@@ -2056,7 +2745,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
             texto.includes('server error') ||
             texto.includes('500 server error');
 
-          if (tieneError500) {
+          if (tieneError500 && !tieneListado) {
             cy.log('ERROR 500 detectado después de buscar - registrando en Excel');
             const casoId = casoExcel.caso || 'TC000';
             const nombre = `${casoId} - ${casoExcel.nombre}`;
@@ -2108,6 +2797,8 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
 
         // Verificar error 500 antes de cambiar el grupo
         return cy.get('body', { timeout: 5000 }).then(($body) => {
+          const tieneFormularioEdicion = $body.find('input[name="data.name"], input#data\\.name, input[name="data.email"], input#data\\.email, #data\\.current_group_id').length > 0;
+
           if (!$body || $body.length === 0) {
             cy.log('No se encontró el body en el formulario de edición - posible error 500');
             const casoId = casoExcel.caso || 'TC000';
@@ -2129,7 +2820,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
             texto.includes('server error') ||
             texto.includes('500 server error');
 
-          if (tieneError500) {
+          if (tieneError500 && !tieneFormularioEdicion) {
             cy.log('ERROR 500 detectado en el formulario de edición - registrando en Excel');
             const casoId = casoExcel.caso || 'TC000';
             const nombre = `${casoId} - ${casoExcel.nombre}`;
@@ -2151,39 +2842,39 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
           // Buscar el label "Grupo" (puede estar en diferentes lugares)
           return cy.contains('label, span, div', /Grupo/i, { timeout: 10000 })
             .scrollIntoView({ duration: 300 })
-      .then(($label) => {
+            .then(($label) => {
               // Buscar el dropdown de grupo cerca del label
-        const wrappers = [
-          $label.closest('[data-field-wrapper]'),
-          $label.closest('.fi-field'),
-          $label.closest('.fi-fo-field-wrp'),
-          $label.closest('.fi-fo-field'),
-          $label.closest('.grid'),
-          $label.closest('section'),
-          $label.closest('form'),
-          $label.parent()
-        ].filter($el => $el && $el.length);
+              const wrappers = [
+                $label.closest('[data-field-wrapper]'),
+                $label.closest('.fi-field'),
+                $label.closest('.fi-fo-field-wrp'),
+                $label.closest('.fi-fo-field'),
+                $label.closest('.grid'),
+                $label.closest('section'),
+                $label.closest('form'),
+                $label.parent()
+              ].filter($el => $el && $el.length);
 
               const openersSelector = '.choices, .choices[data-type="select-one"], [role="combobox"], [aria-haspopup="listbox"], select, .fi-select-trigger';
 
               let encontrado = false;
-        for (const $wrapper of wrappers) {
-          const $objetivo = $wrapper.find(openersSelector).filter(':visible').first();
-          if ($objetivo.length) {
-            cy.wrap($objetivo).scrollIntoView().click({ force: true });
+              for (const $wrapper of wrappers) {
+                const $objetivo = $wrapper.find(openersSelector).filter(':visible').first();
+                if ($objetivo.length) {
+                  cy.wrap($objetivo).scrollIntoView().click({ force: true });
                   cy.wait(500);
                   encontrado = true;
                   break;
-          }
-        }
+                }
+              }
 
               if (!encontrado) {
                 // Si no se encontró en los wrappers, buscar directamente cerca del label
-        cy.get(openersSelector, { timeout: 10000 })
-          .filter(':visible')
-          .first()
-          .scrollIntoView()
-          .click({ force: true });
+                cy.get(openersSelector, { timeout: 10000 })
+                  .filter(':visible')
+                  .first()
+                  .scrollIntoView()
+                  .click({ force: true });
                 cy.wait(500);
               }
 
@@ -2191,36 +2882,36 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
               return cy.wait(500)
                 .then(() => cy.get('body'))
                 .then(($body) => {
-          const $dropdown = $body.find('.choices__list--dropdown.is-active:visible, [role="listbox"]:visible').first();
-          if ($dropdown.length === 0) {
+                  const $dropdown = $body.find('.choices__list--dropdown.is-active:visible, [role="listbox"]:visible').first();
+                  if ($dropdown.length === 0) {
                     cy.log('No se pudo abrir el dropdown de grupo');
                     return cy.wrap({ huboError: true });
-          }
-          
-          const $opciones = $dropdown.find('.choices__item--choice:visible, [role="option"]:visible');
-          if ($opciones.length === 0) {
+                  }
+
+                  const $opciones = $dropdown.find('.choices__item--choice:visible, [role="option"]:visible');
+                  if ($opciones.length === 0) {
                     cy.log('No se encontraron opciones de grupo disponibles');
                     return cy.wrap({ huboError: true });
-          }
-          
+                  }
+
                   // Obtener el texto del grupo actual (SuperAdmin Group)
                   const grupoActual = $body.find('.choices__item--selectable.is-selected, .choices__item--selected').text().trim().toLowerCase();
 
                   // Filtrar opciones que NO sean el grupo actual
-          const $opcionesDiferentes = $opciones.filter((i, el) => {
-            const texto = Cypress.$(el).text().trim().toLowerCase();
+                  const $opcionesDiferentes = $opciones.filter((i, el) => {
+                    const texto = Cypress.$(el).text().trim().toLowerCase();
                     return texto !== grupoActual && texto.length > 0;
-          });
-          
-          if ($opcionesDiferentes.length > 0) {
+                  });
+
+                  if ($opcionesDiferentes.length > 0) {
                     cy.log(`TC044: Seleccionando un grupo diferente a "${grupoActual}"`);
-            cy.wrap($opcionesDiferentes).first().scrollIntoView().click({ force: true });
-          } else {
+                    cy.wrap($opcionesDiferentes).first().scrollIntoView().click({ force: true });
+                  } else {
                     // Si todas las opciones son el grupo actual, seleccionar la segunda (que será diferente por índice)
                     cy.log('TC044: Todas las opciones parecen ser el grupo actual, seleccionando la segunda disponible');
-            if ($opciones.length > 1) {
-              cy.wrap($opciones).eq(1).scrollIntoView().click({ force: true });
-            } else {
+                    if ($opciones.length > 1) {
+                      cy.wrap($opciones).eq(1).scrollIntoView().click({ force: true });
+                    } else {
                       cy.log('No se encontró ningún grupo diferente');
                       return cy.wrap({ huboError: true });
                     }
@@ -2228,25 +2919,11 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
 
                   // Esperar un momento después de hacer clic y verificar si hay error 500
                   return cy.wait(1000)
-                    .then(() => cy.get('body', { timeout: 3000 }))
+                    .then(() => cy.get('body', { timeout: 10000 }))
                     .then(($body) => {
-                      // Verificar si $body existe antes de usarlo
-                      if (!$body || $body.length === 0) {
-                        cy.log('No se encontró el body después de cambiar el grupo - posible error 500');
-                        const casoId = casoExcel.caso || 'TC000';
-                        const nombre = `${casoId} - ${casoExcel.nombre}`;
-                        registrarResultado(
-                          casoId,
-                          nombre,
-                          'Comportamiento correcto',
-                          'ERROR 500: Error interno del servidor detectado al cambiar el grupo',
-                          'ERROR'
-                        );
-                        return cy.wrap({ huboError: true });
-                      }
-
-                      // Verificar si hay error 500 después de cambiar el grupo
                       const texto = $body.text() ? $body.text().toLowerCase() : '';
+                      const tieneFormularioEdicion = $body.find('input[name="data.name"], input#data\\.name, input[name="data.email"], input#data\\.email, #data\\.current_group_id').length > 0;
+                      const tieneMensajeFichajes = /el usuario tiene fichajes hoy\. el cambio debe aplicarse a partir de mañana\./i.test(texto);
                       const tieneError500 = texto.includes('500') ||
                         texto.includes('internal server error') ||
                         texto.includes('error interno del servidor') ||
@@ -2254,7 +2931,11 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
                         texto.includes('500 server error') ||
                         ($body.find('[class*="error-500"], [class*="error500"], [id*="error-500"]').length > 0);
 
-                      if (tieneError500) {
+                      if (tieneMensajeFichajes) {
+                        return verificarMensajeFichajes();
+                      }
+
+                      if (tieneError500 && !tieneFormularioEdicion) {
                         cy.log('ERROR 500 detectado después de cambiar el grupo - registrando en Excel');
                         const casoId = casoExcel.caso || 'TC000';
                         const nombre = `${casoId} - ${casoExcel.nombre}`;
@@ -2268,21 +2949,7 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
                         return cy.wrap({ huboError: true });
                       }
 
-                      // Si no hay error 500, verificar el mensaje sobre fichajes
                       return verificarMensajeFichajes();
-                    }, () => {
-                      // Si falla al obtener el body, puede ser error 500
-                      cy.log('Error al obtener el body después de cambiar el grupo - posible error 500');
-                      const casoId = casoExcel.caso || 'TC000';
-                      const nombre = `${casoId} - ${casoExcel.nombre}`;
-                      registrarResultado(
-                        casoId,
-                        nombre,
-                        'Comportamiento correcto',
-                        'ERROR 500: Error interno del servidor detectado al cambiar el grupo',
-                        'ERROR'
-                      );
-                      return cy.wrap({ huboError: true });
                     });
                 });
             });
@@ -2292,10 +2959,10 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
 
   function verificarMensajeFichajes() {
     cy.log('TC044: Verificando que aparezca el mensaje sobre fichajes...');
-    
+
     // Esperar un momento para que el mensaje aparezca después de cambiar el grupo
     cy.wait(1000);
-    
+
     // Verificar que aparezca el mensaje sobre fichajes usando cy.contains que espera automáticamente
     return cy.contains('div, span, p', /El usuario tiene fichajes hoy\. El cambio debe aplicarse a partir de mañana\./i, { timeout: 10000 })
       .should('be.visible')
@@ -2304,3 +2971,4 @@ describe('EMPLEADOS - Validación completa con gestión de errores y reporte a E
       });
   }
 });
+

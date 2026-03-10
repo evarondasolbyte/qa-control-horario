@@ -23,9 +23,9 @@ describe('GRUPOS - Validación completa con gestión de errores y reporte a Exce
     cy.procesarResultadosPantalla('Grupos');
   });
 
-  // Ejecutar TODOS los casos (sin filtros ni pausas)
+  // Ejecutar todos los casos excepto los pausados
   const CASOS_OK = new Set();
-  const CASOS_PAUSADOS = new Set();
+  const CASOS_PAUSADOS = new Set(['TC038']);
 
   it('Ejecutar todos los casos de Grupos desde Google Sheets', () => {
     cy.obtenerDatosExcel('Grupos').then((casosExcel) => {

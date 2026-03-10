@@ -115,11 +115,7 @@ describe('JORNADAS DIARIAS - Validación completa con gestión de errores y repo
   // Ejecutar todos los casos que no estén pausados
   const CASOS_OK = new Set();
   // Pausar casos del 1 al 27
-  const CASOS_PAUSADOS = new Set([
-    'TC001', 'TC002', 'TC003', 'TC004', 'TC005', 'TC006', 'TC007', 'TC008', 'TC009', 'TC010',
-    'TC011', 'TC012', 'TC013', 'TC014', 'TC015', 'TC016', 'TC017', 'TC018', 'TC019', 'TC020',
-    'TC021', 'TC022', 'TC023', 'TC024', 'TC025', 'TC026', 'TC027'
-  ]);
+  const CASOS_PAUSADOS = new Set([]);
 
   it('Ejecutar todos los casos de Jornadas Diarias desde Google Sheets', () => {
     cy.obtenerDatosExcel('Jornadas Diarias').then((casosExcel) => {
