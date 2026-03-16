@@ -188,6 +188,15 @@ export function verificarErrorEsperado(palabrasClave = []) {
 export function filtrarPorSelectEnPanel(valor, label = 'Empresa') {
   if (!valor) return cy.wrap(null);
 
+  const normalizar = (texto = '') => String(texto)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+  const labelNormalizado = normalizar(label);
+
   cy.get('body').type('{esc}{esc}');
   cy.wait(150);
   cy.get('.fi-ta-table, table').first().click({ force: true });
@@ -202,15 +211,87 @@ export function filtrarPorSelectEnPanel(valor, label = 'Empresa') {
     .as('panelFiltroSelect')
     .should('be.visible');
 
-  cy.get('@panelFiltroSelect').within(() => {
-    cy.contains('label, span, div, p', new RegExp(label, 'i'), { timeout: 10000 })
-      .should('be.visible')
-      .closest('div, fieldset, section')
-      .as('bloqueFiltroSelect');
+  cy.get('@panelFiltroSelect').then(($panel) => {
+    const $panelJq = Cypress.$($panel);
+    let $bloque = Cypress.$();
+
+    const encontrarBloquePorLabel = () => {
+      const $labels = $panelJq.find('label').filter((_, el) => {
+        const texto = normalizar(Cypress.$(el).text());
+        return texto === labelNormalizado || texto.includes(labelNormalizado);
+      });
+
+      if ($labels.length) {
+        for (let i = 0; i < $labels.length; i += 1) {
+          const $label = $labels.eq(i);
+          const forId = $label.attr('for');
+
+          if (forId) {
+            const idEscapado = forId.replace(/([:.\\[\]])/g, '\\$1');
+            const $target = $panelJq.find(`#${idEscapado}`).first();
+            if ($target.length) {
+              const $wrapper = $target.closest('[data-field-wrapper], .fi-fo-field-wrp, .fi-fo-select, .fi-input-wrp, .col-\\[--col-span-default\\], div, section');
+              if ($wrapper.length) return $wrapper;
+              return $target;
+            }
+          }
+
+          const $wrapperDirecto = $label.closest('[data-field-wrapper], .fi-fo-field-wrp, .col-\\[--col-span-default\\], div, section');
+          if ($wrapperDirecto.find('select:visible, [role="combobox"]:visible, .fi-select-trigger:visible, .choices:visible').length > 0) {
+            return $wrapperDirecto;
+          }
+        }
+      }
+
+      return Cypress.$();
+    };
+
+    $bloque = encontrarBloquePorLabel();
+
+    if (!$bloque.length) {
+      const $coincidencias = $panelJq.find('span, div, p')
+        .filter((_, el) => {
+          const texto = normalizar(Cypress.$(el).text());
+          return texto === labelNormalizado || texto.includes(labelNormalizado);
+        });
+
+      $coincidencias.each((_, el) => {
+        const $el = Cypress.$(el);
+        const $candidato = $el.closest('[data-field-wrapper], .fi-fo-field-wrp, .col-\\[--col-span-default\\], div, fieldset, section');
+        if ($candidato.find('select:visible, [role="combobox"]:visible, .fi-select-trigger:visible, .choices:visible').length > 0) {
+          $bloque = $candidato;
+          return false;
+        }
+        return undefined;
+      });
+    }
+
+    if (!$bloque.length) {
+      const $selectsVisibles = $panelJq.find('select:visible, [role="combobox"]:visible, .fi-select-trigger:visible, .choices:visible');
+      let indiceFallback = 0;
+
+      if (labelNormalizado.includes('categoria de entrada')) indiceFallback = 1;
+      if (labelNormalizado === 'grupo') indiceFallback = 0;
+      if (labelNormalizado === 'departamento') indiceFallback = 0;
+
+      const $target = $selectsVisibles.eq(Math.min(indiceFallback, Math.max($selectsVisibles.length - 1, 0)));
+      if ($target.length) {
+        $bloque = $target;
+      }
+    }
+
+    if (!$bloque.length) {
+      throw new Error(`No se encontro el bloque del filtro "${label}" en el panel`);
+    }
+
+    cy.wrap($bloque).as('bloqueFiltroSelect');
   });
 
   cy.get('@bloqueFiltroSelect').then(($bloque) => {
-    const $select = $bloque.find('select:visible');
+    const $scope = Cypress.$($bloque);
+    const $select = $scope.is('select:visible')
+      ? $scope.first()
+      : $scope.find('select:visible').first();
     if ($select.length) {
       cy.wrap($select).first().select(valor, { force: true });
       return;
@@ -231,7 +312,9 @@ export function filtrarPorSelectEnPanel(valor, label = 'Empresa') {
 
     let opened = false;
     for (const sel of openers) {
-      const $el = $bloque.find(sel).first();
+      const $el = $scope.is(sel)
+        ? $scope.first()
+        : $scope.find(sel).first();
       if ($el.length) {
         cy.wrap($el).scrollIntoView().click({ force: true });
         opened = true;
@@ -240,7 +323,7 @@ export function filtrarPorSelectEnPanel(valor, label = 'Empresa') {
     }
 
     if (!opened) {
-      cy.wrap($bloque).scrollIntoView().click('center', { force: true });
+      cy.wrap($scope.first()).scrollIntoView().click('center', { force: true });
     }
 
     cy.get('body').then(($b) => {

@@ -9,26 +9,7 @@ describe('PRUEBAS USUARIO ADMIN - Validacion completa con gestion de errores y r
   const ADMIN_EMAIL = Cypress.env('ADMIN_EMAIL') || 'admin@admin.app';
   const ADMIN_PASSWORD = Cypress.env('ADMIN_PASSWORD') || 'novatranshorario@2025';
 
-  const CASOS_PAUSADOS = new Set([
-    'TC001',
-    'TC002',
-    'TC003',
-    'TC004',
-    'TC005',
-    'TC006',
-    'TC007',
-    'TC008',
-    'TC009',
-    'TC010',
-    'TC011',
-    'TC012',
-    'TC013',
-    'TC014',
-    'TC015',
-    'TC016',
-    'TC017',
-    'TC018'
-  ]);
+  const CASOS_PAUSADOS = new Set([]);
 
   function registrarResultado(numero, nombre, esperado, obtenido, resultado) {
     cy.registrarResultados({

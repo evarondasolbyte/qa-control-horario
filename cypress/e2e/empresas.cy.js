@@ -11,9 +11,7 @@ describe('EMPRESAS - Validacion completa con gestion de errores y reporte a Exce
 
   const CASOS_WARNING = new Set();
   const CASOS_OK = new Set();
-  const CASOS_PAUSADOS = new Set(
-    Array.from({ length: 24 }, (_, idx) => `TC${String(idx + 1).padStart(3, '0')}`)
-  );
+  const CASOS_PAUSADOS = new Set();
 
   const utils = createEmpresasUtils({
     DASHBOARD_PATH,
