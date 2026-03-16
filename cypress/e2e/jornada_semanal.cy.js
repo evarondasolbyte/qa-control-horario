@@ -10,9 +10,7 @@ describe('JORNADA SEMANAL - Validacion completa con gestion de errores y reporte
   const DASHBOARD_PATH = '/panelinterno';
 
   const CASOS_OK = new Set();
-  const CASOS_PAUSADOS = new Set(
-    Array.from({ length: 10 }, (_, idx) => `TC${String(idx + 1).padStart(3, '0')}`)
-  );
+  const CASOS_PAUSADOS = new Set();
 
   function registrarResultado(numero, nombre, esperado, obtenido, resultado) {
     cy.registrarResultados({
