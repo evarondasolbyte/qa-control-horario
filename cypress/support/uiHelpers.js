@@ -185,6 +185,94 @@ export function verificarErrorEsperado(palabrasClave = []) {
   });
 }
 
+export function filtrarPorSelectEnPanel(valor, label = 'Empresa') {
+  if (!valor) return cy.wrap(null);
+
+  cy.get('body').type('{esc}{esc}');
+  cy.wait(150);
+  cy.get('.fi-ta-table, table').first().click({ force: true });
+
+  cy.get('button[title*="Filtrar"], [aria-label*="Filtrar"], button[title*="Filter"], [aria-label*="Filter"]', { timeout: 10000 })
+    .filter(':visible')
+    .first()
+    .scrollIntoView()
+    .click({ force: true });
+
+  cy.get('.fi-dropdown-panel:visible, [role="dialog"]:visible, .fi-modal:visible', { timeout: 10000 })
+    .as('panelFiltroSelect')
+    .should('be.visible');
+
+  cy.get('@panelFiltroSelect').within(() => {
+    cy.contains('label, span, div, p', new RegExp(label, 'i'), { timeout: 10000 })
+      .should('be.visible')
+      .closest('div, fieldset, section')
+      .as('bloqueFiltroSelect');
+  });
+
+  cy.get('@bloqueFiltroSelect').then(($bloque) => {
+    const $select = $bloque.find('select:visible');
+    if ($select.length) {
+      cy.wrap($select).first().select(valor, { force: true });
+      return;
+    }
+
+    const openers = [
+      '[role="combobox"]:visible',
+      '[aria-haspopup="listbox"]:visible',
+      '[aria-expanded]:visible',
+      'button:visible',
+      '[role="button"]:visible',
+      '.fi-select-trigger:visible',
+      '.fi-input:visible',
+      '.fi-field:visible',
+      '.fi-input-wrp:visible',
+      '.fi-fo-field-wrp:visible'
+    ];
+
+    let opened = false;
+    for (const sel of openers) {
+      const $el = $bloque.find(sel).first();
+      if ($el.length) {
+        cy.wrap($el).scrollIntoView().click({ force: true });
+        opened = true;
+        break;
+      }
+    }
+
+    if (!opened) {
+      cy.wrap($bloque).scrollIntoView().click('center', { force: true });
+    }
+
+    cy.get('body').then(($b) => {
+      if ($b.text().includes('Cargando...')) {
+        cy.contains('Cargando...', { timeout: 15000 }).should('not.exist');
+      }
+    });
+
+    const dropdownScopes =
+      '.fi-dropdown-panel:visible, .fi-select-panel:visible, [role="listbox"]:visible, .choices__list--dropdown:visible, .fi-dropdown:visible, ul:visible, div[role="menu"]:visible';
+
+    cy.get('body').then(($body) => {
+      if ($body.find('[role="option"]:visible').length) {
+        cy.contains('[role="option"]:visible', new RegExp(escaparRegex(valor), 'i'), { timeout: 10000 }).click({ force: true });
+      } else {
+        cy.get(dropdownScopes, { timeout: 10000 }).first().within(() => {
+          cy.contains(':visible', new RegExp(escaparRegex(valor), 'i'), { timeout: 10000 }).click({ force: true });
+        });
+      }
+    });
+  });
+
+  cy.get('@panelFiltroSelect').then(($p) => {
+    if ($p.is(':visible')) {
+      cy.get('.fi-ta-table, table').first().click({ force: true });
+    }
+  });
+
+  return cy.get('.fi-ta-row:visible, tr:visible', { timeout: 10000 })
+    .should('have.length.greaterThan', 0);
+}
+
 export function seleccionarJornadaEnModal(aliasModal, textoOpcion) {
   const termino = textoOpcion || '';
   const elegirDistintaDeJornada1 = termino === '__DISTINTA_JORNADA_1__';

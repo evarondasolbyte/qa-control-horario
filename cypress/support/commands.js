@@ -3,6 +3,7 @@ import {
   encontrarBotonAlFinal as encontrarBotonAlFinalUi,
   escribirCampo as escribirCampoUi,
   esperarToastExito as esperarToastExitoUi,
+  filtrarPorSelectEnPanel as filtrarPorSelectEnPanelUi,
   limpiarCampo as limpiarCampoUi,
   seleccionarFechaInicioMananaEnModal as seleccionarFechaInicioMananaEnModalUi,
   seleccionarJornadaEnModal as seleccionarJornadaEnModalUi,
@@ -371,6 +372,10 @@ Cypress.Commands.add('uiVerificarErrorEsperado', (palabrasClave = []) => {
   return verificarErrorEsperadoUi(palabrasClave);
 });
 
+Cypress.Commands.add('uiFiltrarPorSelectEnPanel', (valor, label = 'Empresa') => {
+  return filtrarPorSelectEnPanelUi(valor, label);
+});
+
 Cypress.Commands.add('uiSeleccionarJornadaEnModal', (aliasModal, textoOpcion) => {
   return seleccionarJornadaEnModalUi(aliasModal, textoOpcion);
 });
@@ -459,6 +464,10 @@ Cypress.Commands.add('listadoBorradoMasivoConfirmar', () => {
 });
 
 Cypress.Commands.add('listadoMostrarColumna', (texto) => {
+  const regex = texto instanceof RegExp
+    ? texto
+    : new RegExp(String(texto), 'i');
+
   cy.contains('button[title*="Alternar"], button[aria-label*="column"], .fi-ta-col-toggle button', /columnas/i, { timeout: 10000 })
     .first()
     .click({ force: true });
@@ -466,7 +475,7 @@ Cypress.Commands.add('listadoMostrarColumna', (texto) => {
   cy.get('.fi-dropdown-panel:visible, .fi-modal:visible, [role="dialog"]:visible', { timeout: 10000 })
     .should('be.visible')
     .within(() => {
-      cy.contains('label, span, div', new RegExp(texto, 'i'), { timeout: 10000 })
+      cy.contains('label, span, div', regex, { timeout: 10000 })
         .should('be.visible')
         .then(($el) => {
           const checkbox = $el.find('input[type="checkbox"]');
@@ -483,11 +492,17 @@ Cypress.Commands.add('listadoMostrarColumna', (texto) => {
 });
 
 Cypress.Commands.add('listadoOrdenarColumna', (texto) => {
-  const limpio = (texto || '').replace(/\s*(ASC|DESC|ASC\/DESC).*$/i, '').trim();
+  const regex = texto instanceof RegExp
+    ? texto
+    : null;
+  const limpio = regex
+    ? null
+    : String(texto || '').replace(/\s*(ASC|DESC|ASC\/DESC).*$/i, '').trim();
+
   return cy.get('body').then(($body) => {
-    const regex = new RegExp(`^${limpio}$`, 'i');
+    const matcher = regex || new RegExp(`^${limpio}$`, 'i');
     const $header = $body.find('th.fi-ta-header-cell, .fi-ta-header-cell').filter((_, el) => {
-      return regex.test(Cypress.$(el).text().trim());
+      return matcher.test(Cypress.$(el).text().trim());
     }).first();
 
     if ($header.length > 0) {
