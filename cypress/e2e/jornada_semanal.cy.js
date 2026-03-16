@@ -1433,6 +1433,7 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
   }
 
   function seleccionarOpcionChoices(texto, label) {
+    return cy.uiSeleccionarOpcionChoices(texto, label);
     if (!texto) return cy.wrap(null);
 
     const labelRegex = label ? new RegExp(label, 'i') : null;
@@ -1507,6 +1508,7 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
   }
 
   function escribirCampo(selector, valor) {
+    return cy.uiEscribirCampo(selector, valor);
     if (valor === undefined || valor === null) return cy.wrap(null);
     return cy.get(selector, { timeout: 10000 })
       .first()
@@ -1516,6 +1518,7 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
   }
 
   function limpiarCampo(selector) {
+    return cy.uiLimpiarCampo(selector);
     return cy.get(selector, { timeout: 10000 })
       .first()
       .scrollIntoView()
@@ -1523,6 +1526,7 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
   }
 
   function encontrarBotonAlFinal(textoBoton) {
+    return cy.uiEncontrarBotonAlFinal(textoBoton);
     cy.scrollTo('bottom', { duration: 500 });
     cy.wait(500);
 
@@ -1545,6 +1549,7 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
   }
 
   function confirmarModal(textos = []) {
+    return cy.uiConfirmarModal(textos);
     const opciones = Array.isArray(textos) ? textos : [textos];
 
     return cy.get('.fi-modal:visible, [role="dialog"]:visible, .swal2-container:visible', { timeout: 10000 })
@@ -1570,6 +1575,7 @@ describe('JORNADA SEMANAL - Validación completa con gestión de errores y repor
   }
 
   function esperarToastExito() {
+    return cy.uiEsperarToastExito();
     return cy.get('body').then(($body) => {
       if ($body.find('.swal2-container:visible, .fi-notification:visible').length) {
         cy.contains('.swal2-container .swal2-title, .fi-notification', /Éxito|Guardado|Creado/i, { timeout: 10000 }).should('be.visible');

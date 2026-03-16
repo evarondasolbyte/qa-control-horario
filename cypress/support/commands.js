@@ -1,3 +1,15 @@
+import {
+  confirmarModal as confirmarModalUi,
+  encontrarBotonAlFinal as encontrarBotonAlFinalUi,
+  escribirCampo as escribirCampoUi,
+  esperarToastExito as esperarToastExitoUi,
+  limpiarCampo as limpiarCampoUi,
+  seleccionarFechaInicioMananaEnModal as seleccionarFechaInicioMananaEnModalUi,
+  seleccionarJornadaEnModal as seleccionarJornadaEnModalUi,
+  seleccionarOpcionChoices as seleccionarOpcionChoicesUi,
+  verificarErrorEsperado as verificarErrorEsperadoUi,
+} from './uiHelpers';
+
 // ***********************************************
 // Custom commands y helpers para Control Horario
 // ***********************************************
@@ -328,4 +340,169 @@ Cypress.Commands.add('capturarError', (contexto, error, data = {}) => {
   if (resultadoFinal === 'ERROR') {
     throw error;
   }
+});
+
+// ===== UI HELPERS GLOBALES =====
+Cypress.Commands.add('uiSeleccionarOpcionChoices', (texto, label) => {
+  return seleccionarOpcionChoicesUi(texto, label);
+});
+
+Cypress.Commands.add('uiEscribirCampo', (selector, valor) => {
+  return escribirCampoUi(selector, valor);
+});
+
+Cypress.Commands.add('uiLimpiarCampo', (selector) => {
+  return limpiarCampoUi(selector);
+});
+
+Cypress.Commands.add('uiEncontrarBotonAlFinal', (textoBoton) => {
+  return encontrarBotonAlFinalUi(textoBoton);
+});
+
+Cypress.Commands.add('uiEsperarToastExito', () => {
+  return esperarToastExitoUi();
+});
+
+Cypress.Commands.add('uiConfirmarModal', (textos = []) => {
+  return confirmarModalUi(textos);
+});
+
+Cypress.Commands.add('uiVerificarErrorEsperado', (palabrasClave = []) => {
+  return verificarErrorEsperadoUi(palabrasClave);
+});
+
+Cypress.Commands.add('uiSeleccionarJornadaEnModal', (aliasModal, textoOpcion) => {
+  return seleccionarJornadaEnModalUi(aliasModal, textoOpcion);
+});
+
+Cypress.Commands.add('uiSeleccionarFechaInicioMananaEnModal', (modalAlias) => {
+  return seleccionarFechaInicioMananaEnModalUi(modalAlias);
+});
+
+// ===== LISTADOS GLOBALES =====
+Cypress.Commands.add('listadoCargarPantalla', () => {
+  return cy.get('.fi-ta-table, table', { timeout: 10000 }).should('be.visible');
+});
+
+Cypress.Commands.add('listadoBuscar', (valor) => {
+  return cy.get('input[placeholder*="Buscar"], input[placeholder*="search"]', { timeout: 10000 })
+    .should('be.visible')
+    .clear({ force: true })
+    .type(valor, { force: true })
+    .type('{enter}', { force: true })
+    .then(() => cy.wait(800))
+    .then(() => {
+      return cy.get('body').then(($body) => {
+        if ($body.find('.fi-empty-state, .fi-ta-empty-state').length) {
+          return cy.contains('.fi-empty-state, .fi-ta-empty-state', /No se encontraron registros/i).should('be.visible');
+        }
+        return cy.get('.fi-ta-row:visible, tr:visible').should('have.length.greaterThan', 0);
+      });
+    });
+});
+
+Cypress.Commands.add('listadoLimpiarBusqueda', (valor = '') => {
+  return cy.get('input[placeholder*="Buscar"], input[placeholder*="search"]', { timeout: 10000 })
+    .should('be.visible')
+    .then(($input) => {
+      cy.wrap($input).clear({ force: true });
+      if (valor) {
+        cy.wrap($input).type(valor, { force: true }).type('{enter}', { force: true });
+      }
+    })
+    .then(() => cy.wait(600))
+    .then(() => {
+      cy.get('body').then(($body) => {
+        const chips = $body.find('.fi-active-filter, .MuiChip-deleteIcon, [data-testid="clear-filter"]').length;
+        if (chips) {
+          cy.get('.fi-active-filter button, .MuiChip-deleteIcon, [data-testid="clear-filter"]').each(($chip) => {
+            cy.wrap($chip).click({ force: true });
+          });
+        } else {
+          cy.get('input[placeholder*="Buscar"], input[placeholder*="search"]').clear({ force: true });
+        }
+      });
+      return cy.get('input[placeholder*="Buscar"], input[placeholder*="search"]').should('have.value', '');
+    });
+});
+
+Cypress.Commands.add('listadoSeleccionUnica', () => {
+  return cy.get('.fi-ta-row:visible').first().click({ force: true });
+});
+
+Cypress.Commands.add('listadoSeleccionMultiple', () => {
+  cy.get('.fi-ta-row:visible').eq(0).click({ force: true });
+  return cy.get('.fi-ta-row:visible').eq(1).click({ force: true });
+});
+
+Cypress.Commands.add('listadoSeleccionarTodos', () => {
+  cy.get('thead input[type="checkbox"], .fi-ta-select-all input[type="checkbox"]').first().click({ force: true });
+  cy.wait(300);
+  return cy.get('thead input[type="checkbox"], .fi-ta-select-all input[type="checkbox"]').first().click({ force: true });
+});
+
+Cypress.Commands.add('listadoAbrirAcciones', () => {
+  cy.get('.fi-ta-row:visible').first().click({ force: true });
+  return cy.contains('button, a', /Abrir acciones/i).first().click({ force: true });
+});
+
+Cypress.Commands.add('listadoBorradoMasivoCancelar', () => {
+  cy.listadoAbrirAcciones();
+  cy.contains('button, a', /Borrar seleccionados/i).first().click({ force: true });
+  return cy.uiConfirmarModal(['Cancelar', 'Cerrar', 'No']);
+});
+
+Cypress.Commands.add('listadoBorradoMasivoConfirmar', () => {
+  cy.listadoAbrirAcciones();
+  cy.contains('button, a', /Borrar seleccionados/i).first().click({ force: true });
+  return cy.uiConfirmarModal(['Cancelar', 'Cerrar', 'No']).then(() => cy.get('.fi-ta-row').should('exist'));
+});
+
+Cypress.Commands.add('listadoMostrarColumna', (texto) => {
+  cy.contains('button[title*="Alternar"], button[aria-label*="column"], .fi-ta-col-toggle button', /columnas/i, { timeout: 10000 })
+    .first()
+    .click({ force: true });
+
+  cy.get('.fi-dropdown-panel:visible, .fi-modal:visible, [role="dialog"]:visible', { timeout: 10000 })
+    .should('be.visible')
+    .within(() => {
+      cy.contains('label, span, div', new RegExp(texto, 'i'), { timeout: 10000 })
+        .should('be.visible')
+        .then(($el) => {
+          const checkbox = $el.find('input[type="checkbox"]');
+          if (checkbox.length) {
+            cy.wrap(checkbox).click({ force: true });
+          } else {
+            cy.wrap($el).click({ force: true });
+          }
+        });
+    });
+
+  cy.get('body').click(0, 0, { force: true });
+  return cy.get('.fi-ta-header-cell, th').should('exist');
+});
+
+Cypress.Commands.add('listadoOrdenarColumna', (texto) => {
+  const limpio = (texto || '').replace(/\s*(ASC|DESC|ASC\/DESC).*$/i, '').trim();
+  return cy.get('body').then(($body) => {
+    const regex = new RegExp(`^${limpio}$`, 'i');
+    const $header = $body.find('th.fi-ta-header-cell, .fi-ta-header-cell').filter((_, el) => {
+      return regex.test(Cypress.$(el).text().trim());
+    }).first();
+
+    if ($header.length > 0) {
+      cy.wrap($header)
+        .scrollIntoView({ offset: { top: 0, left: 0 } })
+        .within(($headerEl) => {
+          const $icon = $headerEl.find('span[role="button"], .fi-ta-header-cell-sort-icon, svg.fi-ta-header-cell-sort-icon').first();
+          if ($icon.length) {
+            cy.wrap($icon).click({ force: true });
+            cy.wait(200);
+            cy.wrap($icon).click({ force: true });
+          }
+        });
+    }
+
+    return cy.wrap(null);
+  });
 });

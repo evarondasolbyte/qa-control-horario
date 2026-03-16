@@ -287,6 +287,7 @@ describe('DEPARTAMENTOS - Validación completa con gestión de errores y reporte
 
   // Helper reutilizado para selects Choices (inspirado en grupos.cy.js)
   function seleccionarOpcionChoicesDepartamentos(texto, label) {
+    return cy.uiSeleccionarOpcionChoices(texto, label);
     if (!texto) return cy.wrap(null);
 
     const labelRegex = label ? new RegExp(label, 'i') : null;

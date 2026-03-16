@@ -321,6 +321,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
 
   // === Helpers para selección de opciones ===
   function seleccionarOpcionChoices(texto, label) {
+    return cy.uiSeleccionarOpcionChoices(texto, label);
     if (!texto) return cy.wrap(null);
     const labelRegex = label ? new RegExp(label, 'i') : null;
     const terminoRegex = new RegExp(texto.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
@@ -433,6 +434,7 @@ describe('PRUEBAS USUARIO ADMIN - Validación completa con gestión de errores y
   }
 
   function escribirCampo(selector, valor) {
+    return cy.uiEscribirCampo(selector, valor);
     if (!valor) return cy.wrap(null);
     return cy.get(selector, { timeout: 10000 })
       .scrollIntoView()

@@ -16,9 +16,12 @@
 // Import commands.js using ES2015 syntax:
 import './commands'
 import './excelReader'
+import { registerDataHelpersGlobal } from './dataHelpers'
 
 // Alternatively you can use CommonJS syntax:
 // require('./commands')
+
+registerDataHelpersGlobal();
 
 // Ignorar errores de JavaScript de la aplicación globalmente
 Cypress.on('uncaught:exception', (err, runnable) => {
