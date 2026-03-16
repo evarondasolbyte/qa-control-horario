@@ -1,7 +1,13 @@
 export function obtenerDatoPorEtiqueta(casoExcel, etiquetaBuscada) {
   if (!etiquetaBuscada) return '';
 
-  for (let i = 1; i <= 11; i += 1) {
+  const total = Object.keys(casoExcel || {}).reduce((max, key) => {
+    const match = /^valor_etiqueta_(\d+)$/.exec(key);
+    if (!match) return max;
+    return Math.max(max, Number(match[1]));
+  }, 11);
+
+  for (let i = 1; i <= total; i += 1) {
     const valorEtiqueta = (casoExcel[`valor_etiqueta_${i}`] || '').toLowerCase().trim();
     if (valorEtiqueta === etiquetaBuscada.toLowerCase().trim()) {
       return casoExcel[`dato_${i}`] || '';
@@ -14,7 +20,13 @@ export function obtenerDatoPorEtiqueta(casoExcel, etiquetaBuscada) {
 export function obtenerDatoEnTexto(casoExcel, claveBuscada) {
   if (!claveBuscada) return '';
 
-  for (let i = 1; i <= 11; i += 1) {
+  const total = Object.keys(casoExcel || {}).reduce((max, key) => {
+    const match = /^dato_(\d+)$/.exec(key);
+    if (!match) return max;
+    return Math.max(max, Number(match[1]));
+  }, 11);
+
+  for (let i = 1; i <= total; i += 1) {
     const dato = casoExcel[`dato_${i}`] || '';
     const partes = dato.split(/\n+/).map((t) => t.trim()).filter(Boolean);
 
@@ -61,8 +73,26 @@ export function reemplazarConNumeroAleatorio(valor, numeroCaso) {
   return resultado.replace(/1\+/g, numeroAleatorio.toString());
 }
 
+export function obtenerCamposDesdeExcel(casoExcel) {
+  const campos = {};
+  const total = Object.keys(casoExcel || {}).reduce((max, key) => {
+    const match = /^valor_etiqueta_(\d+)$/.exec(key);
+    if (!match) return max;
+    return Math.max(max, Number(match[1]));
+  }, 12);
+
+  for (let i = 1; i <= total; i += 1) {
+    const clave = casoExcel[`valor_etiqueta_${i}`];
+    const valor = casoExcel[`dato_${i}`];
+    if (clave) campos[clave] = valor;
+  }
+
+  return campos;
+}
+
 export function registerDataHelpersGlobal() {
   Cypress.dataHelpers = {
+    obtenerCamposDesdeExcel,
     obtenerDatoPorEtiqueta,
     obtenerDatoEnTexto,
     extraerDesdeNombre,

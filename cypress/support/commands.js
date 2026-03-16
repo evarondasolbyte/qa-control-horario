@@ -10,6 +10,14 @@ import {
   seleccionarOpcionChoices as seleccionarOpcionChoicesUi,
   verificarErrorEsperado as verificarErrorEsperadoUi,
 } from './uiHelpers';
+import {
+  listadoAbrirAcciones as listadoAbrirAccionesHelper,
+  listadoBorradoMasivoCancelar as listadoBorradoMasivoCancelarHelper,
+  listadoBorradoMasivoConfirmar as listadoBorradoMasivoConfirmarHelper,
+  listadoSeleccionarTodos as listadoSeleccionarTodosHelper,
+  listadoSeleccionMultiple as listadoSeleccionMultipleHelper,
+  listadoSeleccionUnica as listadoSeleccionUnicaHelper
+} from './tableHelpers';
 
 // ***********************************************
 // Custom commands y helpers para Control Horario
@@ -431,36 +439,28 @@ Cypress.Commands.add('listadoLimpiarBusqueda', (valor = '') => {
     });
 });
 
-Cypress.Commands.add('listadoSeleccionUnica', () => {
-  return cy.get('.fi-ta-row:visible').first().click({ force: true });
+Cypress.Commands.add('listadoSeleccionUnica', (config = {}) => {
+  return listadoSeleccionUnicaHelper(config);
 });
 
-Cypress.Commands.add('listadoSeleccionMultiple', () => {
-  cy.get('.fi-ta-row:visible').eq(0).click({ force: true });
-  return cy.get('.fi-ta-row:visible').eq(1).click({ force: true });
+Cypress.Commands.add('listadoSeleccionMultiple', (config = {}) => {
+  return listadoSeleccionMultipleHelper(config);
 });
 
-Cypress.Commands.add('listadoSeleccionarTodos', () => {
-  cy.get('thead input[type="checkbox"], .fi-ta-select-all input[type="checkbox"]').first().click({ force: true });
-  cy.wait(300);
-  return cy.get('thead input[type="checkbox"], .fi-ta-select-all input[type="checkbox"]').first().click({ force: true });
+Cypress.Commands.add('listadoSeleccionarTodos', (config = {}) => {
+  return listadoSeleccionarTodosHelper(config);
 });
 
-Cypress.Commands.add('listadoAbrirAcciones', () => {
-  cy.get('.fi-ta-row:visible').first().click({ force: true });
-  return cy.contains('button, a', /Abrir acciones/i).first().click({ force: true });
+Cypress.Commands.add('listadoAbrirAcciones', (config = {}) => {
+  return listadoAbrirAccionesHelper(config);
 });
 
-Cypress.Commands.add('listadoBorradoMasivoCancelar', () => {
-  cy.listadoAbrirAcciones();
-  cy.contains('button, a', /Borrar seleccionados/i).first().click({ force: true });
-  return cy.uiConfirmarModal(['Cancelar', 'Cerrar', 'No']);
+Cypress.Commands.add('listadoBorradoMasivoCancelar', (config = {}) => {
+  return listadoBorradoMasivoCancelarHelper(config);
 });
 
-Cypress.Commands.add('listadoBorradoMasivoConfirmar', () => {
-  cy.listadoAbrirAcciones();
-  cy.contains('button, a', /Borrar seleccionados/i).first().click({ force: true });
-  return cy.uiConfirmarModal(['Cancelar', 'Cerrar', 'No']).then(() => cy.get('.fi-ta-row').should('exist'));
+Cypress.Commands.add('listadoBorradoMasivoConfirmar', (config = {}) => {
+  return listadoBorradoMasivoConfirmarHelper(config);
 });
 
 Cypress.Commands.add('listadoMostrarColumna', (texto) => {

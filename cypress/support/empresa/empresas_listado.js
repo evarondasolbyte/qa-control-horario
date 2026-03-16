@@ -1,24 +1,7 @@
 export function createEmpresasListadoActions() {
-  function obtenerFilasVisibles() {
-    return cy.get('.fi-ta-row:visible, tbody tr:visible', { timeout: 10000 })
-      .should('have.length.greaterThan', 0);
-  }
-
   function obtenerFilasTabla() {
     return cy.get('.fi-ta-row, tbody tr', { timeout: 10000 })
       .should('have.length.greaterThan', 0);
-  }
-
-  function abrirAccionesMasivas() {
-    return obtenerFilasVisibles()
-      .first()
-      .click({ force: true })
-      .then(() => cy.wait(400))
-      .then(() =>
-        cy.contains('button, a', /Abrir acciones/i, { timeout: 10000 })
-          .scrollIntoView()
-          .click({ force: true })
-      );
   }
 
   function abrirSelectorColumnas() {
@@ -113,62 +96,56 @@ export function createEmpresasListadoActions() {
 
   function seleccionUnica(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-    return obtenerFilasVisibles().first().click({ force: true });
+    return cy.listadoSeleccionUnica({
+      rowSelector: '.fi-ta-row:visible, tbody tr:visible',
+      waitAfterSelect: 0
+    });
   }
 
   function seleccionMultiple(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-    return obtenerFilasVisibles()
-      .then(($filas) => {
-        expect($filas.length).to.be.greaterThan(1);
-      })
-      .then(() => cy.get('.fi-ta-row:visible, tbody tr:visible').first().click({ force: true }))
-      .then(() => cy.wait(300))
-      .then(() => cy.get('.fi-ta-row:visible, tbody tr:visible').eq(1).click({ force: true }));
+    return cy.listadoSeleccionMultiple({
+      rowSelector: '.fi-ta-row:visible, tbody tr:visible',
+      waitAfterSelect: 300
+    });
   }
 
   function seleccionarTodos(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-    return cy.get('input[type="checkbox"]', { timeout: 10000 })
-      .filter(':visible')
-      .first()
-      .click({ force: true })
-      .then(() => cy.wait(300))
-      .then(() =>
-        cy.get('input[type="checkbox"]', { timeout: 10000 })
-          .filter(':visible')
-          .first()
-          .click({ force: true })
-      );
+    return cy.listadoSeleccionarTodos({
+      checkboxSelector: 'thead input[type="checkbox"], thead .fi-checkbox, .fi-ta-select-all input[type="checkbox"]',
+      waitAfterSelect: 300
+    });
   }
 
   function abrirAcciones(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-    return abrirAccionesMasivas();
+    return cy.listadoAbrirAcciones({
+      rowSelector: '.fi-ta-row:visible, tbody tr:visible',
+      waitAfterSelect: 400,
+      waitAfterOpen: 0
+    });
   }
 
   function borradoMasivoConfirmar(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-    return abrirAccionesMasivas()
-      .then(() =>
-        cy.contains('button, a', /Borrar seleccionados/i, { timeout: 10000 })
-          .click({ force: true })
-      )
-      .then(() => cy.wait(300))
-      .then(() => cy.uiConfirmarModal('Cancelar'))
-      .then(() => obtenerFilasTabla());
+    return cy.listadoBorradoMasivoConfirmar({
+      rowSelector: '.fi-ta-row:visible, tbody tr:visible',
+      rowAssertSelector: '.fi-ta-row, tbody tr',
+      confirmTexts: ['Cancelar'],
+      waitAfterSelect: 300,
+      waitAfterOpen: 0
+    }).then(() => obtenerFilasTabla());
   }
 
   function borradoMasivoCancelar(casoExcel) {
     cy.log(`Ejecutando ${casoExcel.caso}: ${casoExcel.nombre}`);
-    return abrirAccionesMasivas()
-      .then(() =>
-        cy.contains('button, a', /Borrar seleccionados/i, { timeout: 10000 })
-          .click({ force: true })
-      )
-      .then(() => cy.wait(300))
-      .then(() => cy.uiConfirmarModal('Cancelar'))
-      .then(() => obtenerFilasTabla());
+    return cy.listadoBorradoMasivoCancelar({
+      rowSelector: '.fi-ta-row:visible, tbody tr:visible',
+      confirmTexts: ['Cancelar'],
+      waitAfterSelect: 300,
+      waitAfterOpen: 0
+    }).then(() => obtenerFilasTabla());
   }
 
   function mostrarColumnaCreatedAt(casoExcel) {
