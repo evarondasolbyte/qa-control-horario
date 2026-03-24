@@ -2,10 +2,11 @@ import { createEmpresasFiltrosActions } from '../support/empresa/empresas_filtro
 import { createEmpresasFormularioActions } from '../support/empresa/empresas_formulario';
 import { createEmpresasListadoActions } from '../support/empresa/empresas_listado';
 import { createEmpresasUtils } from '../support/empresa/empresas_utils';
+import { buildAppUrl } from '../support/appUrls';
 
 describe('EMPRESAS - Validacion completa con gestion de errores y reporte a Excel', () => {
   const archivo = 'reportes_pruebas_novatrans.xlsx';
-  const EMPRESAS_URL_ABS = 'https://horario.dev.novatrans.app/panelinterno/empresas';
+  const EMPRESAS_URL_ABS = buildAppUrl('/panelinterno/empresas');
   const EMPRESAS_PATH = '/panelinterno/empresas';
   const DASHBOARD_PATH = '/panelinterno';
 

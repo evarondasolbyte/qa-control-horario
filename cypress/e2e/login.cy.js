@@ -1,8 +1,9 @@
 import { createLoginActions } from '../support/login/login_helper';
+import { buildAppUrl } from '../support/appUrls';
 
 describe('LOGIN - Validacion completa con gestion de errores y reporte a Excel', () => {
   const archivo = 'reportes_pruebas_control_horario.xlsx';
-  const LOGIN_URL_ABS = 'https://horario.dev.novatrans.app/login';
+  const LOGIN_URL_ABS = buildAppUrl('/login');
   const LOGIN_PATH = '/login';
   const DASHBOARD_PATH = '/panelinterno';
 

@@ -1,10 +1,11 @@
 import { createDepartamentosFiltrosActions } from '../support/departamento/departamentos_filtros';
 import { createDepartamentosFormularioActions } from '../support/departamento/departamentos_formulario';
 import { createDepartamentosUtils } from '../support/departamento/departamentos_utils';
+import { buildAppUrl } from '../support/appUrls';
 
 describe('DEPARTAMENTOS - Validacion completa con gestion de errores y reporte a Excel', () => {
   const archivo = 'reportes_pruebas_novatrans.xlsx';
-  const DEPARTAMENTOS_URL_ABS = 'https://horario.dev.novatrans.app/panelinterno/departamentos';
+  const DEPARTAMENTOS_URL_ABS = buildAppUrl('/panelinterno/departamentos');
   const DEPARTAMENTOS_PATH = '/panelinterno/departamentos';
   const DASHBOARD_PATH = '/panelinterno';
   const CASOS_PAUSADOS = new Set();

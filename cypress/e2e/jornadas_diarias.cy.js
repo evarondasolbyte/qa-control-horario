@@ -2,10 +2,11 @@ import { createJornadasDiariasFiltrosActions } from '../support/jornada_diaria/j
 import { createJornadasDiariasFormularioActions } from '../support/jornada_diaria/jornadas_diarias_formulario';
 import { createJornadasDiariasListadoActions } from '../support/jornada_diaria/jornadas_diarias_listado';
 import { createJornadasDiariasUtils } from '../support/jornada_diaria/jornadas_diarias_utils';
+import { buildAppUrl } from '../support/appUrls';
 
 describe('JORNADAS DIARIAS - Validacion completa con gestion de errores y reporte a Excel', () => {
   const archivo = 'reportes_pruebas_novatrans.xlsx';
-  const JORNADAS_URL_ABS = 'https://horario.dev.novatrans.app/panelinterno/jornadas-diarias';
+  const JORNADAS_URL_ABS = buildAppUrl('/panelinterno/jornadas-diarias');
   const JORNADAS_PATH = '/panelinterno/jornadas-diarias';
   const DASHBOARD_PATH = '/panelinterno';
 

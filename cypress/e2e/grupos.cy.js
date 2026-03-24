@@ -2,11 +2,12 @@ import { createGruposFiltrosActions } from '../support/grupo/grupos_filtros';
 import { createGruposFormularioActions } from '../support/grupo/grupos_formulario';
 import { createGruposJornadasActions } from '../support/grupo/grupos_jornadas';
 import { createGruposUtils } from '../support/grupo/grupos_utils';
+import { buildAppUrl, getAppBaseUrl } from '../support/appUrls';
 
 describe('GRUPOS - Validacion completa con gestion de errores y reporte a Excel', () => {
   const archivo = 'reportes_pruebas_control_horario.xlsx';
-  const BASE_URL = 'https://horario.dev.novatrans.app';
-  const GRUPOS_URL_ABS = `${BASE_URL}/panelinterno/grupos`;
+  const BASE_URL = getAppBaseUrl();
+  const GRUPOS_URL_ABS = buildAppUrl('/panelinterno/grupos');
   const GRUPOS_PATH = '/panelinterno/grupos';
   const DASHBOARD_PATH = '/panelinterno';
   const CASOS_OK = new Set();

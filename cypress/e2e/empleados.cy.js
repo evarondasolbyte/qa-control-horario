@@ -3,11 +3,12 @@ import { createEmpleadosFormularioActions } from '../support/empleado/empleados_
 import { createEmpleadosIncurridosActions } from '../support/empleado/empleados_incurridos';
 import { createEmpleadosListadoActions } from '../support/empleado/empleados_listado';
 import { createEmpleadosUtils } from '../support/empleado/empleados_utils';
+import { buildAppUrl, getAppBaseUrl } from '../support/appUrls';
 
 describe('EMPLEADOS - Validacion completa con gestion de errores y reporte a Excel', () => {
   const archivo = 'reportes_pruebas_control_horario.xlsx';
-  const BASE_URL = 'https://horario.dev.novatrans.app';
-  const EMPLEADOS_URL_ABS = `${BASE_URL}/panelinterno/empleados`;
+  const BASE_URL = getAppBaseUrl();
+  const EMPLEADOS_URL_ABS = buildAppUrl('/panelinterno/empleados');
   const EMPLEADOS_PATH = '/panelinterno/empleados';
   const DASHBOARD_PATH = '/panelinterno';
 

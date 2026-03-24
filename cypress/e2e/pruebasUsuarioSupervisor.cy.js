@@ -1,8 +1,9 @@
 import { createPruebasUsuarioSupervisorActions } from '../support/usuario_supervisor/pruebasUsuarioSupervisor_helper';
+import { getAppBaseUrl } from '../support/appUrls';
 
 describe('PRUEBAS USUARIO SUPERVISOR - Validacion completa con gestion de errores y reporte a Excel', () => {
   const archivo = 'reportes_pruebas_control_horario.xlsx';
-  const BASE_URL = 'https://horario.dev.novatrans.app';
+  const BASE_URL = getAppBaseUrl();
   const DASHBOARD_PATH = '/panelinterno';
   const LOGIN_PATH = '/login';
 
@@ -10,63 +11,7 @@ describe('PRUEBAS USUARIO SUPERVISOR - Validacion completa con gestion de errore
   const SUPERVISOR_PASSWORD = Cypress.env('SUPERVISOR_PASSWORD') || 'novatranshorario@2025';
 
   const CASOS_PAUSADOS = new Set([
-    'TC001',
-    'TC002',
-    'TC003',
-    'TC004',
-    'TC005',
-    'TC006',
-    'TC007',
-    'TC008',
-    'TC009',
-    'TC010',
-    'TC011',
-    'TC012',
-    'TC013',
-    'TC014',
-    'TC015',
-    'TC016',
-    'TC017',
-    'TC018',
-    'TC019',
-    'TC020',
-    'TC021',
-    'TC022',
-    'TC023',
-    'TC024',
-    'TC025',
-    'TC026',
-    'TC027', // *siempre comentado*
-    'TC028',
-    'TC029',
-    'TC030',
-    'TC031',
-    'TC032',
-    'TC033',
-    'TC034',
-    'TC035',
-    'TC036',
-    'TC037',
-    'TC038',
-    'TC039',
-    'TC040',
-    'TC041',
-    'TC042',
-    'TC043',
-    'TC044',
-    'TC045',
-    'TC046',
-    'TC047',
-    'TC048',
-    'TC049',
-    'TC050',
-    'TC051',
-    'TC052',
-    'TC053',
-    'TC054',
-    'TC055',
-    'TC056',
-    'TC057'
+    'TC027' // *siempre comentado*
   ]);
 
   function registrarResultado(numero, nombre, esperado, obtenido, resultado) {

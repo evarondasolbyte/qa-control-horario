@@ -7,6 +7,7 @@ const { defineConfig } = require('cypress');
 const fs = require('fs');
 const path = require('path');
 const xlsx = require('xlsx');
+const appBaseUrl = (process.env.APP_BASE_URL || process.env.BASE_URL || 'https://staging.controlhorario.novatrans.app').replace(/\/+$/, '');
 
 // ==== GOOGLE SHEETS POR REST CON SERVICE ACCOUNT ====
 // Uso GoogleAuth para obtener un Bearer token (OAuth2) a partir de credenciales de Service Account.
@@ -21,10 +22,13 @@ const fetchCompat = (...args) =>
 module.exports = defineConfig({
   e2e: {
     // URL base de la app que estoy probando (Control Horario). Evito repetir en los tests.
-    baseUrl: 'https://horario.dev.novatrans.app/panelinterno',
+    baseUrl: appBaseUrl,
 
     // Ignorar errores de JavaScript de la aplicación globalmente
     setupNodeEvents(on, config) {
+      config.baseUrl = (process.env.APP_BASE_URL || process.env.BASE_URL || config.baseUrl || appBaseUrl).replace(/\/+$/, '');
+      config.env.APP_BASE_URL = config.baseUrl;
+      config.env.FICHAJES_BASE_URL = process.env.FICHAJES_BASE_URL || config.env.FICHAJES_BASE_URL;
       // Pasar variables de entorno del .env a Cypress.env()
       config.env.SUPERVISOR_EMAIL = process.env.SUPERVISOR_EMAIL || config.env.SUPERVISOR_EMAIL;
       config.env.SUPERVISOR_PASSWORD = process.env.SUPERVISOR_PASSWORD || config.env.SUPERVISOR_PASSWORD;

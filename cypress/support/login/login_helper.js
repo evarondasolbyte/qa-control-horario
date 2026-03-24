@@ -1,5 +1,8 @@
+import { buildAppUrl } from '../appUrls';
+
 export function createLoginActions(config) {
   const { DASHBOARD_PATH, LOGIN_PATH, LOGIN_URL_ABS } = config;
+  const rootUrl = buildAppUrl('/');
 
   const userSelector = 'input#usuario, input[name="usuario"], input[placeholder*="Usuario"], input[placeholder*="usuario"]';
   const passwordSelector = 'input#clave, input[name="clave"], input[type="password"], input[placeholder*="Contraseña"], input[placeholder*="password"]';
@@ -186,7 +189,7 @@ export function createLoginActions(config) {
       .then(() => clickBotonSalir())
       .then(() => {
         cy.url({ timeout: 20000 }).should((url) => {
-          expect(url).to.satisfy((u) => u.includes('/login') || u.endsWith('/') || u === 'https://horario.dev.novatrans.app/');
+          expect(url).to.satisfy((u) => u.includes('/login') || u.endsWith('/') || u === rootUrl);
         });
       });
   }
@@ -214,7 +217,7 @@ export function createLoginActions(config) {
         })
         .then(() => {
           cy.url({ timeout: 15000 }).should((url) => {
-            expect(url).to.satisfy((u) => u.includes('/login') || u.endsWith('/') || u === 'https://horario.dev.novatrans.app/');
+            expect(url).to.satisfy((u) => u.includes('/login') || u.endsWith('/') || u === rootUrl);
           });
         });
     });

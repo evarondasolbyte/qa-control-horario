@@ -2,10 +2,11 @@ import { createJornadaSemanalFormularioActions } from '../support/jornada_semana
 import { createJornadaSemanalListadoActions } from '../support/jornada_semanal/jornada_semanal_listado';
 import { createJornadaSemanalTiposActions } from '../support/jornada_semanal/jornada_semanal_tipos';
 import { createJornadaSemanalUtils } from '../support/jornada_semanal/jornada_semanal_utils';
+import { buildAppUrl } from '../support/appUrls';
 
 describe('JORNADA SEMANAL - Validacion completa con gestion de errores y reporte a Excel', () => {
   const archivo = 'reportes_pruebas_novatrans.xlsx';
-  const JORNADA_SEMANAL_URL_ABS = 'https://horario.dev.novatrans.app/panelinterno/jornada-semanal';
+  const JORNADA_SEMANAL_URL_ABS = buildAppUrl('/panelinterno/jornada-semanal');
   const JORNADA_SEMANAL_PATH = '/panelinterno/jornada-semanal';
   const DASHBOARD_PATH = '/panelinterno';
 

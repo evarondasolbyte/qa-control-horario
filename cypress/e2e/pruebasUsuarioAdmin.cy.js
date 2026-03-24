@@ -1,8 +1,9 @@
 import { createPruebasUsuarioAdminActions } from '../support/usuario_admin/pruebasUsuarioAdmin_helper';
+import { getAppBaseUrl } from '../support/appUrls';
 
 describe('PRUEBAS USUARIO ADMIN - Validacion completa con gestion de errores y reporte a Excel', () => {
   const archivo = 'reportes_pruebas_control_horario.xlsx';
-  const BASE_URL = 'https://horario.dev.novatrans.app';
+  const BASE_URL = getAppBaseUrl();
   const DASHBOARD_PATH = '/panelinterno';
   const LOGIN_PATH = '/login';
 
